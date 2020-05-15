@@ -1,0 +1,347 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "December 16, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r message=FALSE}
+pacman::p_load(tidyverse, rvest, scales, extrafont, glue, lubridate)
+
+loadfonts()
+```
+
+
+
+
+
+
+```{r}
+# #mw-content-text > div > div:nth-child(74) > table
+# #mw-content-text > div > div:nth-child(75) > table
+# #mw-content-text > div > div:nth-child(89) > table
+
+# .vevent:nth-child(89) td , .vevent:nth-child(88) td , .vevent:nth-child(87) td , .vevent:nth-child(86) td , .vevent:nth-child(85) td , .vevent:nth-child(84) td , .vevent:nth-child(83) td , .vevent:nth-child(82) td , .vevent:nth-child(81) td , .vevent:nth-child(80) td , .vevent:nth-child(79) td , .vevent:nth-child(78) td , .vevent:nth-child(77) td , .vevent:nth-child(76) td , .vevent:nth-child(75) td , .vevent:nth-child(74) td
+
+
+library(rvest)
+
+url <- "https://en.wikipedia.org/wiki/2018–19_Liverpool_F.C._season"
+
+liv_raw <- url %>% 
+  read_html() %>% 
+  html_nodes() %>% 
+  html_text() %>% 
+  flatten_df()
+
+```
+
+
+
+```{r}
+# For
+# 0-30     12345678
+# 31-60    123456789-
+# 61-90    123456789-123456
+
+# Against
+# 0-30     1
+# 31-60    1
+# 61-90    1234
+
+# mu
+# For
+# 0-30     1234567
+# 31-60    123456789
+# 61-90    123456789-
+
+# Against
+# 0-30     123456789-1
+# 31-60    123456
+# 61-90    123456789
+
+lfc_mufc_goals <- data.frame(
+  goals_for =     c(8, 10, 16, 7, 9, 10),
+  goals_against = c(1, 1,   4, 11, 6, 9),
+  GD =            c(7, 9,  12, -4, 3, 1),
+  time_frame = c("0-30th Minute", "31-60th Minute", "61-90th Minute"),
+  team = c("LFC", "LFC", "LFC", "MUFC", "MUFC", "MUFC")
+)
+```
+
+
+
+```{r}
+lfc_mufc_goals %>% 
+  filter(team == "LFC") %>% 
+  ggplot(aes(time_frame)) +
+  geom_linerange(aes(ymin = goals_against, ymax = goals_for), color = "grey", size = 2) +
+  geom_point(aes(y = goals_for), shape = 21, 
+             color = "black", fill = "red", size = 3.5) +
+  geom_point(aes(y = goals_against), shape = 21, 
+             color = "black", fill = "black", size = 3.5) +
+  scale_y_continuous(breaks = scales::pretty_breaks(), limits = c(0, 18),
+                     name = "Goals") +
+  annotate(geom = "label", x = 1.05, y = 8, hjust = 0, label = "Goals For") +
+  annotate(geom = "label", x = 1.05, y = 2, hjust = 0, label = "Goals Against") +
+  theme_minimal() +
+  theme(axis.title.x = element_blank(),
+        #plot.background = element_rect(color = "red"),
+        #panel.background = element_rect(fill = "red"),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        text = element_text(family = "Roboto Condensed"))
+```
+
+# facet
+
+```{r}
+lfc_mufc_goals %>% 
+  mutate(goals_against = goals_against * -1) %>% 
+  ggplot(aes(y = time_frame)) +
+  geom_segment(aes(x = 0, xend = goals_for, yend = time_frame)) +
+  geom_point(aes(x = goals_for), shape = 21, 
+             color = "black", fill = "red", size = 3.5) +
+  geom_segment(aes(x = 0, xend = goals_against, yend = time_frame)) +
+  geom_point(aes(x = goals_against), shape = 21, 
+             color = "black", fill = "black", size = 3.5) +
+  scale_x_continuous(breaks = scales::pretty_breaks(), limits = c(-5, 20),
+                     name = "Goals") +
+  geom_vline(xintercept = 0) +
+  scale_y_discrete(limits = rev(levels(lfc_mufc_goals$time_frame))) +
+  annotate(geom = "label", x = 6.5, y = 3.4, hjust = 0, label = "Goals For") +
+  annotate(geom = "label", x = -5, y = 3.4, hjust = 0, label = "Goals Against") +
+  labs(x = "Goals", y = "",
+       title = "When In A Match Have Liverpool Scored/Conceded?",
+       subtitle = "Lots of excitement (on both ends of the pitch) late in the game!",
+       caption = glue("
+                      by @R_By_Ryo
+                      Source: Wikipedia")) +
+  theme_minimal() +
+  theme(panel.grid.minor.y = element_blank(),
+        axis.text = element_text(size = 12),
+        title = element_text(size = 15),
+        text = element_text(family = "Roboto Condensed")) +
+  facet_wrap(~ team, scales = "free")
+```
+
+
+
+# double-sided lolipop
+
+```{r}
+lfc_mufc_goals %>% 
+  filter(team == "LFC") %>% 
+  mutate(goals_against = goals_against * -1) %>% 
+  ggplot(aes(y = time_frame)) +
+  geom_segment(aes(x = 0, xend = goals_for, yend = time_frame)) +
+  geom_point(aes(x = goals_for), shape = 21, 
+             color = "black", fill = "red", size = 3.5) +
+  geom_segment(aes(x = 0, xend = goals_against, yend = time_frame)) +
+  geom_point(aes(x = goals_against), shape = 21, 
+             color = "black", fill = "black", size = 3.5) +
+  scale_x_continuous(breaks = scales::pretty_breaks(), limits = c(-5, 20),
+                     name = "Goals") +
+  geom_vline(xintercept = 0) +
+  scale_y_discrete(limits = rev(levels(lfc_mufc_goals$time_frame))) +
+  annotate(geom = "label", x = 6.5, y = 3.4, hjust = 0, label = "Goals For") +
+  annotate(geom = "label", x = -5, y = 3.4, hjust = 0, label = "Goals Against") +
+  labs(x = "Goals", y = "",
+       title = "When In A Match Have Liverpool Scored/Conceded?",
+       subtitle = "Lots of excitement (on both ends of the pitch) late in the game!",
+       caption = glue("
+                      by @R_By_Ryo
+                      Source: Wikipedia")) +
+  theme_minimal() +
+  theme(panel.grid.minor.y = element_blank(),
+        axis.text = element_text(size = 12),
+        title = element_text(size = 15),
+        text = element_text(family = "Roboto Condensed"))
+```
+
+
+
+```{r fig.width=10, fig.height=5}
+lfc_mufc_goals %>% 
+  filter(team == "MUFC") %>% 
+  mutate(goals_against = goals_against * -1) %>% 
+  ggplot(aes(y = time_frame)) +
+  geom_segment(aes(x = 0, xend = goals_for, yend = time_frame)) +
+  geom_point(aes(x = goals_for), shape = 21, 
+             color = "black", fill = "red", size = 3.5) +
+  geom_segment(aes(x = 0, xend = goals_against, yend = time_frame)) +
+  geom_point(aes(x = goals_against), shape = 21, 
+             color = "black", fill = "black", size = 3.5) +
+  scale_x_continuous(breaks = scales::pretty_breaks(), limits = c(-12, 12),
+                     name = "Goals") +
+  geom_vline(xintercept = 0) +
+  scale_y_discrete(limits = rev(levels(lfc_mufc_goals$time_frame))) +
+  annotate(geom = "label", x = 6, y = 3.4, hjust = 0, label = "Goals For") +
+  annotate(geom = "label", x = -10, y = 3.4, hjust = 0, label = "Goals Against") +
+  labs(x = "Goals", y = "",
+       title = "When In A Match Have Manchester United Scored/Conceded?",
+       caption = glue("
+                      by @R_By_Ryo
+                      Source: Wikipedia")) +
+  theme_minimal() +
+  theme(panel.grid.minor.y = element_blank(),
+        axis.text = element_text(size = 12),
+        title = element_text(size = 15),
+        text = element_text(family = "Roboto Condensed"))
+```
+
+
+## Waffle chart
+
+```{r}
+library(waffle)
+library(extrafont)
+loadfonts(device = "win")
+
+NW_Derby <- c(`Liverpool FC (55)` = 55, 
+              `Draw (46)` = 46, 
+              `Manchester United (68)` = 68)
+# "soccer-ball-o"
+
+options(device = "pdf")
+
+waf <- waffle(
+  NW_Derby, rows = 6, size = 1, 
+  title = "North West Derby (1895-2018)",
+  colors = c("red", "grey", "black"), 
+  use_glyph = "futbol", glyph_size = 5,
+  legend_pos = "bottom"
+)
+
+ggsave("NW_derby_waffle", device = "pdf")
+
+waffle(
+  NW_Derby, rows = 6, size = 1, 
+  title = "North West Derby (1895-2018)",
+  colors = c("red", "grey", "black"), 
+  use_glyph = "flag", glyph_size = 5,
+  legend_pos = "bottom"
+)
+
+ggsave(plot = waf, "NW_derby_waffle", device = "pdf")
+```
+
+
+```{r}
+tibble(
+  team = c("Liverpool FC", "Draw", "Man. Utd"),
+  values = c(55, 46, 68)
+) -> liv_man
+
+ggplot(liv_man, aes(fill = team, values = values)) +
+  geom_waffle(color = "white", size=1.125, n_rows = 6) +
+  scale_x_discrete(expand=c(0,0)) +
+  scale_y_discrete(expand=c(0,0)) +
+  ggthemes::scale_fill_tableau(name=NULL) +
+  coord_equal() +
+  hrbrthemes::theme_ipsum_rc(grid="") +
+  theme_enhance_waffle() +
+  labs(title = "The North West Derby")
+
+
+tibble(
+  parts = factor(rep(month.abb[1:3], 3), levels=month.abb[1:3]),
+  values = c(10, 20, 30, 6, 14, 40, 30, 20, 10),
+  fct = c(rep("Thing 1", 3), rep("Thing 2", 3), rep("Thing 3", 3))
+) -> xdf
+
+ggplot(xdf, aes(fill=parts, values=values)) +
+  geom_waffle(color = "white", size = 1.125, n_rows = 6) +
+  facet_wrap(~fct, ncol=1) +
+  scale_x_discrete(expand=c(0,0)) +
+  scale_y_discrete(expand=c(0,0)) +
+  ggthemes::scale_fill_tableau(name=NULL) +
+  coord_equal() +
+  labs(
+    title = "Faceted Waffle Geoms"
+  ) +
+  hrbrthemes::theme_ipsum_rc(grid="") +
+  theme_enhance_waffle()
+```
+
+
+
+## Klopp vs. Mourinho
+
+```{r}
+# LFC: table.wikitable:nth-child(3)
+# MUFC: table.wikitable:nth-child(6)
+# W D L from LIVERPOOL's perspective
+
+url <- "https://en.wikipedia.org/wiki/Liverpool_F.C.–Manchester_United_F.C._rivalry"
+
+liv_results_raw <- url %>% 
+  read_html() %>% 
+  html_nodes("table.wikitable:nth-child(3)") %>% 
+  html_table() %>% 
+  flatten_df()
+
+liv_results_clean <- liv_results_raw %>% 
+  separate(Score, into = c("LFC", "MUFC"), sep = "–") %>% # copy-paste the double-dash...
+  mutate(result = case_when(
+    LFC > MUFC ~ "win",
+    LFC < MUFC ~ "loss",
+    LFC == MUFC ~ "draw"
+  ))
+
+mu_results_raw <- url %>% 
+  read_html() %>% 
+  html_nodes("table.wikitable:nth-child(6)") %>% 
+  html_table() %>% 
+  flatten_df()
+
+mu_results_clean <- mu_results_raw %>% 
+  separate(Score, into = c("MUFC", "LFC"), sep = "–") %>% # copy-paste the double-dash...
+  mutate(result = case_when(
+    LFC > MUFC ~ "win",
+    LFC < MUFC ~ "loss",
+    LFC == MUFC ~ "draw"
+  ))
+
+liv_mu_results_df <- liv_results_clean %>% 
+  bind_rows(mu_results_clean) %>% 
+  mutate(Date = dmy(Date),
+         result = as_factor(result),
+         result = fct_relevel(result, c("win", "draw", "loss"))) %>% 
+  arrange(Date)
+
+
+# PLOT
+
+liv_mu_results_df %>% 
+  mutate(result = fct_rev(result)) %>% 
+  ggplot(aes(x = Date, y = result, group = 1)) +
+  geom_rect(aes(xmin = as.Date("1895-10-12"), xmax = as.Date("2018-12-16")), 
+            ymin = 2.5, ymax = Inf,
+            fill = "red") +
+  scale_fill_manual(values = alpha("red", 0.2)) +
+  geom_path() +
+  geom_point() +
+  theme_minimal()
+
+# OR vertical color bars for W/D/L ??
+
+liv_mu_results_df %>% 
+  filter(Date >= as.Date("2016-01-07")) %>% 
+  mutate(result = fct_rev(result)) %>% 
+  ggplot(aes(x = Date, y = result, group = 1)) +
+  geom_rect(aes(xmin = result, xmax = result), 
+            ymin = -Inf, ymax = Inf,
+            fill = "red") +
+  scale_fill_manual(values = alpha("red", 0.2)) +
+  geom_path() +
+  geom_point() +
+  theme_minimal()
+```
+

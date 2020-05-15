@@ -1,0 +1,83 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "January 12, 2019"
+output: 
+  md_document:
+    variant: markdown_github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+A new rival, Australia, emerged to challenge Japan in Asia as they joined the AFC in 2006. From the come-from-behind defeat in the Group Stages of the 2006 World Cup (still one of my most painful memories as a Japanese football fan...) and to an extra-time win in the 2011 Asian Cup Final, Japan and Australia have dramatically clashed in the past decade.
+
+Using the `waffle` package I can create a graphic that summarizes the results between the two sides.
+
+
+```{r}
+japan_versus <- function(data, ...) {
+  # filter 
+  filter_vars <- enquos(...)
+  
+  jp_vs <- data %>% 
+    filter(!!!filter_vars) %>% 
+    # count results type per opponent
+    group_by(result, opponent) %>% 
+    mutate(n = n()) %>% 
+    ungroup() %>% 
+    # sum amount of goals by Japan and opponent
+    group_by(result, opponent) %>% 
+    summarize(j_g = sum(japan_goals),
+              o_g = sum(opp_goals),
+              n = n()) %>% 
+    ungroup() %>% 
+    # spread results over multiple columns
+    spread(result, n) %>% 
+    # 1. failsafe against no type of result against an opponent
+    # 2. sum up counts per opponent
+    group_by(opponent) %>% 
+    mutate(Win = if("Win" %in% names(.)){return(Win)} else{return(0)},
+         Draw = if("Draw" %in% names(.)){return(Draw)} else{return(0)},
+         Loss = if("Loss" %in% names(.)){return(Loss)} else{return(0)}) %>% 
+    summarize(Win = sum(Win, na.rm = TRUE),
+              Draw = sum(Draw, na.rm = TRUE),
+              Loss = sum(Loss, na.rm = TRUE),
+              `Goals For` = sum(j_g),
+              `Goals Against` = sum(o_g))
+  
+  return(jp_vs)
+}
+```
+
+```{r, fig.height = 4, fig.width=3}
+library(glue)
+library(dplyr)
+library(tidyr)
+library(waffle)
+library(extrafont)
+loadfonts(device = "win")
+
+results_jp_asia <- readRDS("../data/results_jp_asia.RDS")
+
+
+jp_aus <- results_jp_asia %>% 
+  japan_versus(opponent == "Australia") %>% 
+  select(-opponent, Japan = Win, Australia = Loss) %>% 
+  gather(key = "team", value = "values", -`Goals For`, -`Goals Against`) %>% 
+  select(-contains("Goals"))
+
+# Waffle plot!
+waffle(
+  jp_aus, rows = 4, size = 1, 
+  title = glue("
+               Japan vs. Australia: 
+               The New 'Asian' Rivalry"),
+  colors = c("red", "grey", "blue"), 
+  use_glyph = "futbol", glyph_size = 5,
+  legend_pos = "bottom"
+)
+
+```
+

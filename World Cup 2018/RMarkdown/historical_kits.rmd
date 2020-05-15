@@ -1,0 +1,826 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "June 24, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Uniform animation
+https://guyabel.com/post/football-kits/
+
+ex. Liverpool 
+
+
+```{r}
+library(rvest)
+library(dplyr)
+library(purrr)
+library(stringr)
+library(magick)
+
+url <- "http://www.historicalkits.co.uk/Liverpool/Liverpool.htm"
+
+#kits
+#div.float:nth-child(2)
+#div.float:nth-child(3) > img:nth-child(2)
+#div.float:nth-child(2)
+#div.float:nth-child(2) > img:nth-child(2)
+#div.float:nth-child(67)
+#div.float:nth-child(2) > img:nth-child(2)
+#div.float:nth-child(2) > img:nth-child(2)
+#.float p , .float img
+#/html/body/div[2]/div[4]/div[2]/div[2]/div[3]/img
+#div.float:nth-child(4) > img:nth-child(1)
+#html body div#master div#bodywrap div#maincol div.content div.float img
+
+url %>% 
+  read_html() %>% 
+  html_nodes(".float p , .float img") %>% 
+  html_attr("src")
+
+
+url %>% 
+  read_html() %>% 
+  html_nodes(".float img") %>% 
+  html_attr("src")
+
+url %>% 
+  read_html() %>% 
+  html_nodes(".float p , .float img") %>% 
+  html_text() %>% 
+  c(., NA) %>% 
+  .[-1]
+
+
+
+scrape_img_url <- function(html){
+  html %>%
+    html_nodes(".float p , .float img") %>%
+    html_attr("src") %>%
+    tbl_df() %>%
+    set_names("img_url") %>%
+    mutate(label = html %>% 
+             html_nodes(".float p , .float img") %>%
+             html_text() %>%
+             c(., NA) %>%
+             .[-1])
+}
+
+
+d1 <- read_html("http://www.historicalkits.co.uk/Liverpool/Liverpool.htm") %>%
+  scrape_img_url() %>%
+  filter(str_detect(string = img_url, pattern = "/Liverpool"),
+         !str_detect(string = img_url, pattern = "unknown")) %>%
+  mutate(
+    label = str_replace_all(string = label,
+                            pattern = "[:alpha:]|\\s", 
+                            replacement = "")
+  )
+# some wrong labels... 
+
+
+
+# 2000s
+
+d2 <- d1 %>% 
+  slice(46:58)
+
+# download img
+kits <- d2 %>% 
+  mutate(img_url = paste0("http://www.historicalkits.co.uk", img_url)) %>% 
+  select(img_url) %>% 
+  map(image_read) %>% 
+  set_names("img")
+
+# morph
+
+kits_ani <- image_morph(c(kits$img[1], kits$img[1]), frames = 4)
+kits_ani
+
+
+
+seq_along(kits$img)
+2:length(kits$img)
+
+seq_along(kits$img) - 1
+
+# save vector of seq_along() 
+# map image_morph with vectors of kits$img
+
+kits_len <- seq_along(kits$img)
+
+2:length(kits$img)
+
+
+kits %>% 
+  map(kits_len, function(x) image_morph(.$img - 1, .$img), frame = 5)
+
+
+for (i in 2:length(kits$img)) {
+  
+  kits_morph0 <- image_morph(c(kits$img[i - 1], kits$img[i]), frames = 4)
+  
+  kits_morph1 <- image_morph(c(kits$img[i], kits$img[i]), frames = 4)
+  
+  kits_ani <- c(kits_ani, kits_morph0)
+  
+  kits_ani <- c(kits_ani, kits_morph1)
+  
+}
+
+# animation
+
+kits_ani %>% 
+  image_animate(fps = 10) %>% 
+  image_write(path = "liv_2000s.gif")
+
+```
+
+
+## Japan World Cup uniforms
+
+- example with just japan uniforms
+
+```{r}
+library(magick)
+
+japan_kits <- list.files(path = "./japan_kits/", pattern = "*.gif", full.names = TRUE) %>% 
+  map(image_read) %>% 
+  image_join()
+
+# no join
+japan_kits2 <- list.files(path = "./japan_kits/", pattern = "*.gif", full.names = TRUE) %>% 
+  map(image_read) 
+
+japan_kits2 <- japan_kits2 %>% set_names(rep("img", 6))
+
+japan_kits <- list(img = japan_kits) # turn into list with "img" as name
+# subset [1] to [6] in this. so can image_morph() call each and previous
+
+japan_seq2 <- seq_along(japan_kits2)
+
+
+#
+japan_ani <- image_morph(c(japan_kits$img[1], japan_kits$img[1]), frame = 10)
+
+kits_morph_j0 <- 2:6 %>% 
+  map(~ image_morph(c(japan_kits$img[.x-1], japan_kits$img[.x]), frames = 10)) %>% 
+  image_join()
+
+kits_morph_j1 <- 2:6 %>% 
+  map(~ image_morph(c(japan_kits$img[.x], japan_kits$img[.x]), frames = 10)) %>% 
+  image_join()
+
+jkits_ani <- c(japan_ani, kits_morph_j0)
+# jkits_ani <- c(jkits_ani, kits_morph_j1)  #  need to integrate PAUSE with morph anims
+
+jkits_ani %>% 
+  image_animate(fps = 10) %>% 
+  image_write(path = "japan_kit.gif")
+
+```
+
+
+
+## Combine kits for every match sid-by-side
+
+- Read in uniforms (kit_read() function)
+- Stitch them up with respective opponent uniforms
+- add labels + increase border size
+- Loop through image_morph()
+- Find LAST frame of previous and FIRST frame of current
+- image_morph() those two frames for smooth transition between last game of World Cup and first game of next World Cup!
+- repeat to 2018
+
+```{r kit_read fun}
+kit_read <- function(path) {
+  
+  japan_kits <- list.files(path = path, pattern = "*.gif", full.names = TRUE) %>% 
+    map(image_read) %>% 
+    image_join()  
+  
+  return(japan_kits)
+  
+}
+```
+
+
+```{r 1998}
+library(magick)
+library(dplyr)
+library(purrr)
+library(extrafont)
+#loadfonts()
+source("../scripts/kit_read().r")
+# 1998 WC
+
+japan_kits_1998 <- kit_read(path = "../japan_kits/1998/")
+
+kit_labels_1998 <- data_frame(
+  label = c("Japan (0) vs. (1) Argentina", "Japan (0) vs. (1) Croatia", "Japan (1) vs. (2) Jamaica")
+)
+
+wc_label_1998 <- "World Cup: 1998 (France)"
+
+j_arg <- japan_kits_1998[c(4, 1)] %>% image_append()  # vs. Argentina
+j_cro <- japan_kits_1998[c(4, 2)] %>% image_append()  # vs. Croatia
+j_jam <- japan_kits_1998[c(4, 3)] %>% image_append()  # vs. Jamaica
+
+j_kits_1998 <- c(j_arg, j_cro, j_jam)
+# make into function?
+
+kit_list_1998 <-list(img = j_kits_1998)
+
+# for loop
+for (i in seq_along(kit_list_1998$img)) {
+  
+  kit_list_1998$img[i] <- kit_list_1998$img[i] %>% 
+    image_border(geometry = "25x60", color = "white") %>% 
+    image_annotate(text = kit_labels_1998$label[i], 
+                   gravity = "south",
+                   location = "+0+325",
+                   font = "Trebuchet MS",
+                   size = 25) %>% 
+    image_annotate(text = wc_label_1998,
+                   gravity = "south",
+                   location = "+0+350",
+                   font = "Trebuchet MS",
+                   size = 25) %>% 
+    image_annotate(
+      text = "Images are Copyright of Historical\nFootball Kits and reproduced by\nkind permission.",
+      gravity = "south"
+    )
+}
+
+
+# guy abel code for include PAUSE
+jkits_ani_1998 <- image_morph(c(kit_list_1998$img[1], kit_list_1998$img[1]), frames = 8)
+
+for(i in 2:length(kit_list_1998$img)){
+  kits_morph0 <- image_morph(c(kit_list_1998$img[i-1], kit_list_1998$img[i]), frames = 4)
+  
+  kits_morph1 <- image_morph(c(kit_list_1998$img[i], kit_list_1998$img[i]), frames = 8)
+  
+  jkits_ani_1998 <- c(jkits_ani_1998, kits_morph0)
+  
+  jkits_ani_1998 <- c(jkits_ani_1998, kits_morph1)
+}
+
+# animate!
+jkits_ani_1998 %>% 
+  image_animate(fps = 10) %>% 
+  image_write(path = "japan_versus_kit_1998.gif")
+
+```
+
+
+
+
+```{r map() 1998}
+j_kits %>% 
+  image_border(geometry = "10x60", color = "white") %>% 
+  image_annotate(text = "world cup 1998", 
+                 gravity = "south", location = "+0+300",
+                 font = "Trebuchet MS", size = 30)
+
+# image_morph each of the match img
+
+japan_ani <- image_morph(c(kit_list$img[1], kit_list$img[1]), frame = 10)
+
+2:length(kit_list$img) %>% 
+  map(~ image_morph(c(kit_list$img[.x-1], kit_list$img[.x]), frames = 10)) %>% 
+  image_join()
+
+kits_morph_j0 <- 2:3 %>% 
+  map(~ image_morph(c(kit_list$img[.x-1], kit_list$img[.x]), frames = 10)) %>% 
+  image_join()
+
+kits_morph_j1 <- 2:3 %>% 
+  map(~ image_morph(c(kit_list$img[.x], kit_list$img[.x]), frames = 10)) %>% 
+  image_join()
+
+jkits_ani <- c(japan_ani, kits_morph_j0)
+jkits_ani <- c(jkits_ani, kits_morph_j1)  #  need to integrate PAUSE with morph anims
+
+## as function?
+
+```
+
+
+
+
+```{r 2002}
+# 2002 World Cup
+library(magick)
+library(dplyr)
+library(purrr)
+library(extrafont)
+#loadfonts()
+source("../scripts/kit_read().r")
+
+japan_kits_2002 <- kit_read(path = "../japan_kits/2002/")
+
+kit_labels_2002 <- data_frame(
+  label = c("Japan (2) vs. (2) Belgium", "Japan (1) vs. (0) Russia", "Japan (2) vs. (0) Tunisia", "Japan (0) vs. (1) Turkey")
+)
+
+wc_label_2002 <- "World Cup: 2002 (Korea/Japan)"
+
+# 2 is Japan Away, 3 is Japan Home
+# 1 = belgium, 4 = russia, 5 = tunisia, 6 = Turkey
+j_bel <- japan_kits_2002[c(2, 1)] %>% image_append()  # vs. Belgium
+j_rus <- japan_kits_2002[c(3, 4)] %>% image_append()  # vs. Russia
+j_tun <- japan_kits_2002[c(3, 5)] %>% image_append()  # vs. Tunisia
+j_tur <- japan_kits_2002[c(3, 6)] %>% image_append()  # vs. Turkey
+
+j_kits_2002 <- c(j_bel, j_rus, j_tun, j_tur)
+# make into function?
+
+kit_list_2002 <-list(img = j_kits_2002)
+
+for (i in seq_along(kit_list_2002$img)) {
+  
+  kit_list_2002$img[i] <- kit_list_2002$img[i] %>% 
+    image_border(geometry = "25x60", color = "white") %>% 
+    image_annotate(text = kit_labels_2002$label[i], 
+                   gravity = "south",
+                   location = "+0+325",
+                   font = "Trebuchet MS",
+                   size = 25) %>% 
+    image_annotate(text = wc_label_2002,
+                   gravity = "south",
+                   location = "+0+350",
+                   font = "Trebuchet MS",
+                   size = 25) %>% 
+    image_annotate(
+      text = "Images are Copyright of Historical\nFootball Kits and reproduced by\nkind permission.",
+      gravity = "south"
+    )
+}
+
+# guy abel code for include PAUSE
+jkits_ani_2002 <- image_morph(c(kit_list_2002$img[1], kit_list_2002$img[1]), frames = 8)
+
+for(i in 2:length(kit_list_2002$img)){
+  kits_morph0 <- image_morph(c(kit_list_2002$img[i-1], kit_list_2002$img[i]), frames = 4)
+  
+  kits_morph1 <- image_morph(c(kit_list_2002$img[i], kit_list_2002$img[i]), frames = 8)
+  
+  jkits_ani_2002 <- c(jkits_ani_2002, kits_morph0)
+  
+  jkits_ani_2002 <- c(jkits_ani_2002, kits_morph1)
+}
+
+jkits_ani_2002 %>% 
+  image_animate(fps = 10) %>% 
+  image_write(path = "japan_versus_kit_2002.gif")
+
+# connect 1998 and 2002
+
+jkits_ani_ALL <- c(jkits_ani_1998, jkits_ani_2002)
+
+jkits_ani_ALL <-list(img = jkits_ani_ALL)
+
+# frame 42 is the transition from 2998 to 2006
+jkits_ani_ALL_ch <- image_morph(c(jkits_ani_ALL$img[42], jkits_ani_ALL$img[43]), frames = 8)
+
+jj <- append(jkits_ani_ALL$img, jkits_ani_ALL_ch, 42)
+
+jj %>% 
+  image_animate(fps = 10) %>% 
+  image_write(path = "japan_TEST_history.gif")
+
+```
+
+```{r map() 2002}
+# image_morph each of the match img
+
+japan_ani_2002 <- image_morph(c(kit_list_2002$img[1], kit_list_2002$img[1]), frame = 10)
+
+kits_morph_j0 <- 2:3 %>% 
+  map(~ image_morph(c(kit_list_2002$img[.x-1], kit_list_2002$img[.x]), frames = 10)) %>% 
+  image_join()
+
+kits_morph_j1 <- 2:3 %>% 
+  map(~ image_morph(c(kit_list_2002$img[.x], kit_list_2002$img[.x]), frames = 10)) %>% 
+  image_join()
+
+jkits_ani_2002 <- c(japan_ani_2002, kits_morph_j0)
+#jkits_ani <- c(jkits_ani, kits_morph_j1)  #  need to integrate PAUSE with morph anims
+
+## as function?
+
+```
+
+
+```{r 2006}
+# 2006 World Cup
+library(magick)
+library(dplyr)
+library(purrr)
+library(extrafont)
+#loadfonts()
+source("../scripts/kit_read().r")
+
+japan_kits_2006 <- kit_read(path = "../japan_kits/2006/")
+
+kit_labels_2006 <- data_frame(
+  label = c("Japan (1) vs. (3) Australia", "Japan (0) vs. (0) Croatia", "Japan (1) vs. (4) Brazil")
+)
+
+wc_label_2006 <- "World Cup: 2006 (Germany)"
+
+# 5 is Japan Away, 4 is Japan Home
+# 1 = aus, 2 = bra, 3 = cro
+j_aus <- japan_kits_2006[c(5, 1)] %>% image_append()  # vs. Australia
+j_cro <- japan_kits_2006[c(4, 3)] %>% image_append()  # vs. Croatia
+j_bra <- japan_kits_2006[c(4, 2)] %>% image_append()  # vs. Brazil
+
+j_kits_2006 <- c(j_aus, j_cro, j_bra)
+# make into function?
+
+kit_list_2006 <-list(img = j_kits_2006)
+
+for (i in seq_along(kit_list_2006$img)) {
+  
+  kit_list_2006$img[i] <- kit_list_2006$img[i] %>% 
+    image_border(geometry = "25x60", color = "white") %>% 
+    image_annotate(text = kit_labels_2006$label[i], 
+                   gravity = "south",
+                   location = "+0+325",
+                   font = "Trebuchet MS",
+                   size = 25) %>% 
+    image_annotate(text = wc_label_2006,
+                   gravity = "south",
+                   location = "+0+350",
+                   font = "Trebuchet MS",
+                   size = 25) %>% 
+    image_annotate(
+      text = "Images are Copyright of Historical\nFootball Kits and reproduced by\nkind permission.",
+      gravity = "south"
+    )
+}
+
+# guy abel code for include PAUSE
+jkits_ani_2006 <- image_morph(c(kit_list_2006$img[1], kit_list_2006$img[1]), frames = 8)
+
+for(i in 2:length(kit_list_2006$img)){
+  kits_morph0 <- image_morph(c(kit_list_2006$img[i-1], kit_list_2006$img[i]), frames = 4)
+  
+  kits_morph1 <- image_morph(c(kit_list_2006$img[i], kit_list_2006$img[i]), frames = 8)
+  
+  jkits_ani_2006 <- c(jkits_ani_2006, kits_morph0)
+  
+  jkits_ani_2006 <- c(jkits_ani_2006, kits_morph1)
+}
+
+jkits_ani_2006 %>% 
+  image_animate(fps = 10) %>% 
+  image_write(path = "japan_versus_kit_2006.gif")
+
+# connect 1998/2002 to 2006
+
+jkits_ani_ALL <- c(jj, jkits_ani_2006)
+
+jkits_ani_ALL <-list(img = jkits_ani_ALL)
+
+# 110 >>> 111
+jkits_ani_ALL_ch <- image_morph(c(jkits_ani_ALL$img[110], jkits_ani_ALL$img[111]), frames = 8)
+
+jj2 <- append(jkits_ani_ALL$img, jkits_ani_ALL_ch, 110)
+
+jj2 %>% 
+  image_animate(fps = 10) %>% 
+  image_write(path = "japan_TEST2_history.gif")
+
+```
+
+
+
+```{r map() 2006}
+# image_morph each of the match img
+
+japan_ani_2006 <- image_morph(c(kit_list_2006$img[1], kit_list_2006$img[1]), frame = 10)
+
+kits_morph_j0 <- 2:3 %>% 
+  map(~ image_morph(c(kit_list_2006$img[.x-1], kit_list_2006$img[.x]), frames = 10)) %>% 
+  image_join()
+
+kits_morph_j1 <- 2:3 %>% 
+  map(~ image_morph(c(kit_list_2006$img[.x], kit_list_2006$img[.x]), frames = 10)) %>% 
+  image_join()
+
+jkits_ani_2006 <- c(japan_ani_2006, kits_morph_j0)
+#jkits_ani <- c(jkits_ani, kits_morph_j1)  #  need to integrate PAUSE with morph anims
+
+## as function?
+
+
+
+
+
+```
+
+
+
+```{r 2010}
+# 2010 World Cup
+library(magick)
+library(dplyr)
+library(purrr)
+library(extrafont)
+#loadfonts()
+source("../scripts/kit_read().r")
+
+japan_kits_2010 <- kit_read(path = "../japan_kits/2010/")
+
+kit_labels_2010 <- data_frame(
+  label = c("Japan (1) vs. (0) Cameroon", "Japan (0) vs. (1) Netherlands", "Japan (3) vs. (1) Denmark", "Japan (0) vs. (1 PK) Paraguay")
+)
+
+wc_label_2010 <- "World Cup: 2010 (South Africa)"
+
+# 3 is Japan Away, 4 is Japan Home (blue shorts), 5 is Japan Home (white shorts), 
+# 1 = cam, 2 = den, 6 = ned, par = 7
+j_cam <- japan_kits_2010[c(5, 1)] %>% image_append()  # vs. Cameroon
+j_ned <- japan_kits_2010[c(3, 6)] %>% image_append()  # vs. Netherlands
+j_den <- japan_kits_2010[c(4, 2)] %>% image_append()  # vs. Denmark
+j_par <- japan_kits_2010[c(4, 7)] %>% image_append()  # vs. Paraguay
+
+j_kits_2010 <- c(j_cam, j_ned, j_den, j_par)
+
+kit_list_2010 <-list(img = j_kits_2010)
+
+# loop over to add annotations
+for (i in seq_along(kit_list_2010$img)) {
+  
+  kit_list_2010$img[i] <- kit_list_2010$img[i] %>% 
+    image_border(geometry = "25x60", color = "white") %>% 
+    image_annotate(text = kit_labels_2010$label[i], 
+                   gravity = "south",
+                   location = "+0+325",
+                   font = "Trebuchet MS",
+                   size = 25) %>% 
+    image_annotate(text = wc_label_2010,
+                   gravity = "south",
+                   location = "+0+350",
+                   font = "Trebuchet MS",
+                   size = 25) %>% 
+    image_annotate(
+      text = "Images are Copyright of Historical\nFootball Kits and reproduced by\nkind permission.",
+      gravity = "south"
+    )
+}
+
+# guy abel code for include PAUSE
+jkits_ani_2010 <- image_morph(c(kit_list_2010$img[1], kit_list_2010$img[1]), frames = 8)
+
+for(i in 2:length(kit_list_2010$img)){
+  kits_morph0 <- image_morph(c(kit_list_2010$img[i-1], kit_list_2010$img[i]), frames = 4)
+  
+  kits_morph1 <- image_morph(c(kit_list_2010$img[i], kit_list_2010$img[i]), frames = 8)
+  
+  jkits_ani_2010 <- c(jkits_ani_2010, kits_morph0)
+  
+  jkits_ani_2010 <- c(jkits_ani_2010, kits_morph1)
+}
+
+jkits_ani_2010 %>% 
+  image_animate(fps = 10) %>% 
+  image_write(path = "japan_versus_kit_2010.gif")
+
+# connect 1998/2002/2006 to 2010
+
+jkits_ani_ALL <- c(jj2, jkits_ani_2010)
+
+jkits_ani_ALL <-list(img = jkits_ani_ALL)
+
+# 162 >>> 163
+jkits_ani_ALL_ch <- image_morph(c(jkits_ani_ALL$img[162], jkits_ani_ALL$img[163]), frames = 8)
+
+jj3 <- append(jkits_ani_ALL$img, jkits_ani_ALL_ch, 162)
+
+jj3 %>% 
+  image_animate(fps = 10) %>% 
+  image_write(path = "japan_TEST3_history.gif")
+
+```
+
+
+
+```{r map() 2010}
+# image_morph each of the match img
+
+japan_ani_2010 <- image_morph(c(kit_list_2010$img[1], kit_list_2010$img[1]), frame = 10)
+japan_ani_2010_2 <- image_morph(c(kit_list_2010$img[2], kit_list_2010$img[2]), frame = 10)
+japan_ani_2010_3 <- image_morph(c(kit_list_2010$img[3], kit_list_2010$img[3]), frame = 10)
+
+kits_morph_j0 <- 2:3 %>% 
+  map(~ image_morph(c(kit_list_2010$img[.x-1], kit_list_2010$img[.x]), frames = 10)) %>% 
+  image_join()
+
+kits_morph_j1 <- 2:3 %>% 
+  map(~ image_morph(c(kit_list_2010$img[.x], kit_list_2010$img[.x]), frames = 10)) %>% 
+  image_join()
+
+jkits_ani_2010 <- c(japan_ani_2010, kits_morph_j0)
+#jkits_ani <- c(jkits_ani, kits_morph_j1)  #  need to integrate PAUSE with morph anims
+
+## as function?
+
+```
+
+
+```{r 2014}
+# 2014 World Cup
+library(magick)
+library(dplyr)
+library(purrr)
+library(extrafont)
+#loadfonts()
+source("../scripts/kit_read().r")
+
+japan_kits_2014 <- kit_read(path = "../japan_kits/2014/")
+
+kit_labels_2014 <- data_frame(
+  label = c("Japan (1) vs. (2) Ivory Coast", "Japan (0) vs. (0) Greece", "Japan (1) vs. (4) Colombia")
+)
+
+wc_label_2014 <- "World Cup: 2014 (Brazil)"
+
+# 4 is is Japan Home
+# 1 = col, 2 = gre, 3 = civ
+j_civ <- japan_kits_2014[c(4, 3)] %>% image_append()  # vs. Cote d'Ivoire
+j_gre <- japan_kits_2014[c(4, 2)] %>% image_append()  # vs. Greece
+j_col <- japan_kits_2014[c(4, 1)] %>% image_append()  # vs. Colombia
+
+j_kits_2014 <- c(j_civ, j_gre, j_col)
+
+kit_list_2014 <-list(img = j_kits_2014)
+
+# loop over to add annotations
+for (i in seq_along(kit_list_2014$img)) {
+  
+  kit_list_2014$img[i] <- kit_list_2014$img[i] %>% 
+    image_border(geometry = "25x60", color = "white") %>% 
+    image_annotate(text = kit_labels_2014$label[i], 
+                   gravity = "south",
+                   location = "+0+325",
+                   font = "Trebuchet MS",
+                   size = 25) %>% 
+    image_annotate(text = wc_label_2014,
+                   gravity = "south",
+                   location = "+0+350",
+                   font = "Trebuchet MS",
+                   size = 25) %>% 
+    image_annotate(
+      text = "Images are Copyright of Historical\nFootball Kits and reproduced by\nkind permission.",
+      gravity = "south"
+    )
+}
+
+# guy abel code for include PAUSE
+jkits_ani_2014 <- image_morph(c(kit_list_2014$img[1], kit_list_2014$img[1]), frames = 8)
+
+for(i in 2:length(kit_list_2014$img)){
+  kits_morph0 <- image_morph(c(kit_list_2014$img[i-1], kit_list_2014$img[i]), frames = 4)
+  
+  kits_morph1 <- image_morph(c(kit_list_2014$img[i], kit_list_2014$img[i]), frames = 8)
+  
+  jkits_ani_2014 <- c(jkits_ani_2014, kits_morph0)
+  
+  jkits_ani_2014 <- c(jkits_ani_2014, kits_morph1)
+}
+
+
+jkits_ani_2014 %>% 
+  image_animate(fps = 10) %>% 
+  image_write(path = "japan_versus_kit_2014.gif")
+
+# connect 1998/2002/2006/2010 to 2014
+
+jkits_ani_ALL <- c(jj3, jkits_ani_2014)
+
+jkits_ani_ALL <-list(img = jkits_ani_ALL)
+
+# 110 >>> 111
+jkits_ani_ALL_ch <- image_morph(c(jkits_ani_ALL$img[230], jkits_ani_ALL$img[231]), frames = 8)
+
+jj4 <- append(jkits_ani_ALL$img, jkits_ani_ALL_ch, 230)
+
+jj4 %>% 
+  image_animate(fps = 10) %>% 
+  image_write(path = "japan_TEST4_history.gif")
+
+```
+
+
+
+
+```{r map() 2014}
+# image_morph each of the match img
+
+japan_ani_2014 <- image_morph(c(kit_list_2014$img[1], kit_list_2014$img[1]), frame = 10)
+
+kits_morph_j0 <- 2:3 %>% 
+  map(~ image_morph(c(kit_list_2014$img[.x-1], kit_list_2014$img[.x]), frames = 10)) %>% 
+  image_join()
+
+kits_morph_j1 <- 2:3 %>% 
+  map(~ image_morph(c(kit_list_2010$img[.x], kit_list_2010$img[.x]), frames = 10)) %>% 
+  image_join()
+
+jkits_ani_2014 <- c(japan_ani_2014, kits_morph_j0)
+#jkits_ani <- c(jkits_ani, kits_morph_j1)  #  need to integrate PAUSE with morph anims
+
+```
+
+
+```{r 2018}
+# 2018 World Cup
+library(magick)
+library(dplyr)
+library(purrr)
+library(extrafont)
+#loadfonts()
+source("../scripts/kit_read().r")
+
+japan_kits_2018 <- kit_read(path = "../japan_kits/2018/")
+
+kit_labels_2018 <- data_frame(
+  label = c("Japan (2) vs. (1) Colombia", "Japan (2) vs. (2) Senegal", "Japan (0) vs. (1) Poland", "Japan (2) vs. (3) Belgium")
+)
+
+wc_label_2018 <- "World Cup: 2018 (Russia)"
+
+# 3 is Japan Home
+# 2 = col, 4 = pol, 5 = sen, bel = 1
+j_col <- japan_kits_2018[c(3, 2)] %>% image_append()  # vs. Colombia
+j_sen <- japan_kits_2018[c(3, 5)] %>% image_append()  # vs. Senegal
+j_pol <- japan_kits_2018[c(3, 4)] %>% image_append()  # vs. Poland
+j_bel <- japan_kits_2018[c(3, 1)] %>% image_append()  # vs. Belgium
+
+j_kits_2018 <- c(j_col, j_sen, j_pol, j_bel)
+
+kit_list_2018 <-list(img = j_kits_2018)
+
+# loop over to add annotations
+for (i in seq_along(kit_list_2018$img)) {
+  
+  kit_list_2018$img[i] <- kit_list_2018$img[i] %>% 
+    image_border(geometry = "25x60", color = "white") %>% 
+    image_annotate(text = kit_labels_2018$label[i], 
+                   gravity = "south",
+                   location = "+0+325",
+                   font = "Trebuchet MS",
+                   size = 25) %>% 
+    image_annotate(text = wc_label_2018,
+                   gravity = "south",
+                   location = "+0+350",
+                   font = "Trebuchet MS",
+                   size = 25) %>% 
+    image_annotate(
+      text = "Images are Copyright of Historical\nFootball Kits and reproduced by\nkind permission.",
+      gravity = "south"
+    )
+}
+
+# guy abel code for include PAUSE
+jkits_ani_2018 <- image_morph(c(kit_list_2018$img[1], kit_list_2018$img[1]), frames = 8)
+
+for(i in 2:length(kit_list_2018$img)){
+  kits_morph0 <- image_morph(c(kit_list_2018$img[i-1], kit_list_2018$img[i]), frames = 4)
+  
+  kits_morph1 <- image_morph(c(kit_list_2018$img[i], kit_list_2018$img[i]), frames = 8)
+  
+  jkits_ani_2018 <- c(jkits_ani_2018, kits_morph0)
+  
+  jkits_ani_2018 <- c(jkits_ani_2018, kits_morph1)
+}
+
+jkits_ani_2018 %>% 
+  image_animate(fps = 10) %>% 
+  image_write(path = "japan_versus_kit_2018.gif")
+
+# connect 1998/2002/2006/2010 to 2014
+
+jkits_ani_ALL <- c(jj4, jkits_ani_2018)
+
+jkits_ani_ALL <-list(img = jkits_ani_ALL)
+
+# 110 >>> 111
+jkits_ani_ALL_ch <- image_morph(c(jkits_ani_ALL$img[282], jkits_ani_ALL$img[283]), frames = 8)
+
+jj5 <- append(jkits_ani_ALL$img, jkits_ani_ALL_ch, 282)
+
+jj5 %>% 
+  image_animate(fps = 10) %>% 
+  image_write(path = "japan_TEST5_history.gif")
+
+```
+
+

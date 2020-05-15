@@ -1,0 +1,368 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "1/14/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# pkgs
+
+```{r, message=FALSE, warning=FALSE}
+pacman::p_load(tidyverse, polite, scales, ggimage, 
+               ggforce, ggtext,
+               rvest, glue, extrafont, ggrepel, magick)
+loadfonts()
+```
+
+## add_logo
+
+```{r}
+add_logo <- function(plot_path, logo_path, logo_position, 
+                     logo_scale = 10){
+
+    # Requires magick R Package https://github.com/ropensci/magick
+
+    # Useful error message for logo position
+    if (!logo_position %in% c("top right", "top left", "bottom right", "bottom left")) {
+        stop("Error Message: Uh oh! Logo Position not recognized\n  Try: logo_positon = 'top left', 'top right', 'bottom left', or 'bottom right'")
+    }
+
+    # read in raw images
+    plot <- magick::image_read(plot_path)
+    logo_raw <- magick::image_read(logo_path)
+
+    # get dimensions of plot for scaling
+    plot_height <- magick::image_info(plot)$height
+    plot_width <- magick::image_info(plot)$width
+
+    # default scale to 1/10th width of plot
+    # Can change with logo_scale
+    logo <- magick::image_scale(logo_raw, as.character(plot_width/logo_scale))
+
+    # Get width of logo
+    logo_width <- magick::image_info(logo)$width
+    logo_height <- magick::image_info(logo)$height
+
+    # Set position of logo
+    # Position starts at 0,0 at top left
+    # Using 0.01 for 1% - aesthetic padding
+
+    if (logo_position == "top right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "top left") {
+        x_pos = 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "bottom right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    } else if (logo_position == "bottom left") {
+        x_pos = 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    }
+
+    # Compose the actual overlay
+    magick::image_composite(plot, logo, offset = paste0("+", x_pos, "+", y_pos))
+}
+```
+
+# Bundesliga data
+
+- Save "Player Standard Stats" & "Squad Standard Stats" as a `.csv` file or whatever you prefer.
+- https://fbref.com/en/comps/20/passing/Bundesliga-Stats
+
+### player stats
+
+```{r}
+buli_player_passing_stats_hinrunde_raw <- read_csv(here::here("data/buli_player_passing_stats_hinrunde.csv"),
+                                  skip = 1, col_names = TRUE)
+
+buli_player_passing_stats_hinrunde <- buli_player_passing_stats_hinrunde_raw %>% 
+  rename_at(vars(14:16), 
+            ~ glue::glue("short_{colnames(buli_player_passing_stats_hinrunde_raw)[14:16]}")) %>% 
+  rename_at(vars(17:19), 
+            ~ glue::glue("medium_{colnames(buli_player_passing_stats_hinrunde_raw)[17:19]}")) %>% 
+  rename_at(vars(20:22), 
+            ~ glue::glue("long_{colnames(buli_player_passing_stats_hinrunde_raw)[20:22]}")) %>% 
+  rename_all(~str_replace_all(colnames(buli_player_passing_stats_hinrunde), "_[0-9]", "")) %>% 
+  select(-Matches, -Rk)
+
+glimpse(buli_player_passing_stats_hinrunde)
+```
+
+```{r}
+## save
+saveRDS(buli_player_passing_stats_hinrunde, 
+        file = glue("{here::here()}/data/buli_player_passing_stats_hinrunde.RDS"))
+
+buli_player_passing_stats_hinrunde <- readRDS(
+  file = glue("{here::here()}/data/buli_player_passing_stats_hinrunde.RDS"))
+```
+
+```{r}
+buli_player_passing_hinrunde_clean <- buli_player_passing_stats_hinrunde %>% 
+  separate(Player, into = c("fullname", "allname"), sep = "\\\\") %>%   separate(fullname, into = c("firstname", "lastname"),
+           sep = "\\s", extra = "merge",
+           remove = FALSE) %>%
+  mutate(fname = str_extract(firstname, "[A-Z]{1}")) %>% 
+  ## players like Fabinho listed without Tavares last name
+  mutate(player = if_else(is.na(lastname), firstname, lastname)) %>% 
+  mutate(player = case_when(
+    !is.na(lastname) ~ glue("{fname}. {lastname}"),
+    TRUE ~ firstname)) %>% 
+  mutate(min = `90s` * 90) %>% 
+  mutate(KPper90 = (KP / min) * 90,
+         xAper90 = (xA / min) * 90,
+         finalthirdper90 = (`1/3` / min) * 90,
+         PPAper90 = (PPA / min) * 90,
+         CrsPAper90 = (CrsPA / min) * 90,
+         TBper90 = (TB / min) * 90) %>% 
+  ## keep fullname so can differentiate A. Gomes (Andre/Angel), etc.
+  select(-`90s`, -firstname, -lastname, -allname, 
+         team_name = Squad, -fname) 
+
+glimpse(buli_player_passing_hinrunde_clean)
+```
+
+
+```{r}
+## save
+saveRDS(buli_player_passing_hinrunde_clean, 
+        file = glue("{here::here()}/data/buli_player_passing_hinrunde_clean.RDS"))
+
+buli_player_passing_hinrunde_clean <- readRDS(
+  file = glue("{here::here()}/data/buli_player_passing_hinrunde_clean.RDS"))
+```
+
+
+
+
+# plot
+
+
+```{r}
+buli_player_passing_hinrunde_clean %>% 
+  filter(min >= 900) %>% 
+  summarize(avg_f3per90 = median(finalthirdper90),
+            avg_PPAper90 = median(PPAper90))
+
+buli_player_passing_hinrunde_clean %>% 
+  filter(min >= 900,
+         Pos %in% c("FW", "FWMF")) %>% 
+  summarize(avg_f3per90 = median(finalthirdper90),
+            avg_PPAper90 = median(PPAper90))
+```
+
+- when filtering for FW/Attacking MFs, F3 falls and PPA rises - fairly self-explanatory and reasonable
+
+```{r}
+bad_box <- data.frame(
+  xmin = -Inf, xmax = 2.5, 
+  ymin = -Inf, ymax = 0.48)
+
+chance_creation_box <- data.frame(
+  xmin = -Inf, xmax = 2.5, 
+  ymin = 0.48, ymax = Inf)
+
+midfield_progress_box <- data.frame(
+  xmin = 2.5, xmax = Inf, 
+  ymin = -Inf, ymax = 0.48)
+
+dual_box <- data.frame(
+  xmin = 2.5, xmax = Inf, 
+  ymin = 0.48, ymax = Inf)
+```
+
+
+```{r}
+buli_pass_df <- buli_player_passing_hinrunde_clean %>% 
+  filter(min >= 900)
+```
+
+```{r}
+bayern_desc <- "Both Kimmich & Alaba have been playing much more centrally this season (Center Midfield & Center Back respectively) the former only behind teammate Coutinho and Brandt in Passes into the Penalty Area per 90 with the latter leading the league with 9.83 Passes into the Final 3rd per 90. Thiago keeps things ticking in midfield with a 90.2% Pass Accuracy."
+
+brandt_desc <- "Julian Brandt has become the primary ball progressor in this Dortmund side with his 2.99 PPA per 90 leading the league by a considerable margin. A lot of this comes from his throughballs (0.68 Through Balls per 90, 1st in the league). Along with his 7th and 4th ranking (within BVB) in Final Third Passes per 90 & xA per 90 respectively, it shows that he provides the incisive ball in between the build-up & the final pass. Indeed, his 1.45 KP per 90 is 4th in the team behind Hazard, Sancho, & Hakimi."
+```
+
+Kimmich:
+
+Alaba:
+
+
+Brandt: 0.68 TB per 90 (1st), 2.99 PPA per 90 (1st), 4.1 Final Third per 90 (30th), 0.19 xA per 90 (30th)
+
+1.45 KP per 90 (47t league, 4th team) xA per 90 (4th), final 3rd (7th)
+
+```{r  fig.width = 14, fig.height = 10}
+buli_progressive_pass_hinrunde_plot <- ggplot(buli_pass_df, 
+       aes(x = finalthirdper90, y = PPAper90)) +
+  ## area fills
+  geom_rect(data = chance_creation_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "yellow", alpha = 0.1) +
+  geom_rect(data = bad_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "red", alpha = 0.1) +
+  geom_rect(data = midfield_progress_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "orange", alpha = 0.2) +
+  geom_rect(data = dual_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "green", alpha = 0.1) +
+  ## median reference lines
+  geom_hline(yintercept = 0.48, color = "grey20", alpha = 0.4) +
+  geom_vline(xintercept = 2.5, color = "grey20", alpha = 0.4) +
+  ## player data
+  geom_point(color = "red", size = 3) +
+  ## league average
+  annotate("text", family = "Roboto Condensed", fontface = "bold",
+           x = 2.6, y = 3.8, hjust = 0, color = "grey20",
+           label = "Average OP Passes into the Final Third per 90: 2.5") +
+  annotate("text", family = "Roboto Condensed", fontface = "bold",
+           x = 9.2, y = 0.44, hjust = 0, color = "grey20",
+           label = "Average OP Passes into Penalty Area per 90: 0.48") +
+  ## area labels
+  annotate("text", family = "Roboto Condensed", fontface = "bold",
+           x = 0.25, y = 3.8, 
+           hjust = 0, color = "#CCCC00", size = 6,
+           label = "Good Chance Creation") +
+  annotate("text", family = "Roboto Condensed", fontface = "bold",
+           x = 9.2, y = 0.2, 
+           hjust = 0, color = "orange", size = 6,
+           label = "Good Midfield Progression") +
+  annotate(
+    "text", family = "Roboto Condensed", fontface = "bold",
+    x = 9.2, y = 3.77, 
+    hjust = 0, color = "#228B22", size = 6,
+    label = "Good Chance Creation\nGood Midfield Progression") +
+  ## player labels
+  geom_text_repel(
+    data = buli_player_passing_hinrunde_clean %>% 
+      filter(min >= 900, 
+             finalthirdper90 > 3.75 | PPAper90 > 1.2,
+             !player %in% c("J. Kimmich", 
+                            "D. Alaba", 
+                            "T. Alcántara",
+                            "P. Coutinho",
+                            "J. Brandt")),
+    aes(label = player, family = "Roboto Condensed", 
+        fontface = "bold"),
+    min.segment.length = 0.3, seed = 15, size = 3.5,
+    segment.color = "red", point.padding = 0.6,
+    color = "grey20") +
+  ## Bayern description
+  geom_mark_hull(
+    aes(filter = player %in% c("J. Kimmich", 
+                               "D. Alaba", 
+                               "T. Alcántara",
+                               "P. Coutinho"),
+        label = "Bayern's Passing Maestros.",
+        description = bayern_desc),
+    expand = unit(2.5, "mm"), con.cap = unit(0, "mm"),
+    label.width = unit(170, 'mm'), label.buffer = unit(10, "mm"),
+    label.family = "Roboto Condensed", label.fontsize = c(14, 12),
+    label.colour = "grey20", label.fill = "#cce5cc") +
+  ## Brandt description #7fbf7f #b2d8b2
+  geom_mark_hull(
+    aes(filter = player %in% c("J. Brandt"),
+        label = "Julian Brandt: BVB's Elite Ball Progressor.",
+        description = brandt_desc),
+    expand = unit(2.5, "mm"), con.cap = unit(0, "mm"),
+    label.width = unit(250, 'mm'), label.buffer = unit(0.5, "mm"),
+    label.family = "Roboto Condensed", label.fontsize = c(14, 12),
+    label.colour = "grey20", label.fill = "#cce5cc") + 
+  ## Bayern player labels
+  geom_text_repel(
+    data = buli_player_passing_hinrunde_clean %>%
+      filter(player %in% c("J. Kimmich", 
+                               "D. Alaba", 
+                               "T. Alcántara",
+                               "P. Coutinho")),
+    aes(label = player, family = "Roboto Condensed", 
+        fontface = "bold"),
+    seed = 15, size = 4.5, color = "red",
+    min.segment.length = 0, segment.color = "red",
+    point.padding = 0.5, nudge_x = 0.6) +
+  ## scales
+  scale_x_continuous(labels = seq(0, 12, 1), 
+                     breaks = seq(0, 12, 1),
+                     limits = c(0, 12),
+                     expand = c(0.01, 0)) +
+  scale_y_continuous(labels = seq(0, 4, 0.5), 
+                     breaks = seq(0, 4, 0.5),
+                     limits = c(0, 4),
+                     expand = c(0.01, 0)) +
+  labs(title = "Progressive Passers: <b style='color: red'>Bundesliga (2019-2020)</b>", 
+       subtitle = glue("
+                       Hinrunde | January 15th, 2020
+                       <p><b style='color: grey20'>Average (Median)</b> | Minimum 900 Minutes Played"),
+       caption = glue("
+                      Data: FBref | StatsBomb
+                      Ryo Nakagawara, Twitter: @R_by_Ryo"),
+       x = "Open Play Passes into Final Third per 90",
+       y = "Open Play Passes into Penalty Area per 90") +
+  theme_minimal() +
+  theme(text = element_markdown(family = "Roboto Condensed"),
+        plot.title = element_markdown(size = 20),
+        plot.subtitle = element_markdown(size = 16),
+        plot.caption = element_text(size = 14),
+        axis.title = element_text(size = 14),
+        axis.text = element_text(size = 12))
+
+buli_progressive_pass_hinrunde_plot
+```
+
+Florian Neuhaus (12th PPA per 90), Levin Oztunali (8th PPA per 90, 37th xA per 90)
+
+The clairvoyant crossers: Filip Kostic (1.38), Christian Gunter (1.0), Niko Gießelmann (0.8) Completed Crosses into Penalty Area per 90 (1st-3rd in league). Kostic also boasts an impressive 2.6 KP per 90 (4th in the league).
+
+RB Leipzig will surely miss Diego Demme who played a huge part in their build up. 6th in the league (just behind teammate Upamecano) in Passes into Final 3rd per 90 and leads Leipzig with 0.3 Through Balls per 90.
+
+
+
+## save
+
+```{r}
+ggsave(plot = buli_progressive_pass_hinrunde_plot, 
+       here::here("Bundesliga 2019-2020/output/buli_progressive_pass_1920_hinrunde.png"),
+       height = 10, width = 14)
+```
+
+```{r}
+plot_logo <- add_logo(
+  plot_path = here::here("Bundesliga 2019-2020/output/buli_progressive_pass_1920_hinrunde.png"),
+  logo_path = here::here("../soccer_match_reports/img/Bundesliga_logo_(2017).svg"),
+  logo_position = "top right",
+  logo_scale = 18)
+
+plot_logo
+```
+
+```{r}
+image_write(image = plot_logo, 
+            here::here("Bundesliga 2019-2020/output/buli_progressive_pass_1920_hinrunde_logo.png"))
+```
+
+
+
+
+
+
+
+
+
+
+

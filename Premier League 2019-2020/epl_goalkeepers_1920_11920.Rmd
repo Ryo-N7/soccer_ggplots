@@ -1,0 +1,505 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "1/19/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# pkgs
+
+```{r, message=FALSE, warning=FALSE}
+pacman::p_load(tidyverse, polite, scales, ggimage, 
+               ggforce, ggtext,
+               rvest, glue, extrafont, ggrepel, magick)
+loadfonts()
+```
+
+## add_logo
+
+```{r}
+add_logo <- function(plot_path, logo_path, logo_position, 
+                     logo_scale = 10){
+
+    # Requires magick R Package https://github.com/ropensci/magick
+
+    # Useful error message for logo position
+    if (!logo_position %in% c("top right", "top left", "bottom right", "bottom left")) {
+        stop("Error Message: Uh oh! Logo Position not recognized\n  Try: logo_positon = 'top left', 'top right', 'bottom left', or 'bottom right'")
+    }
+
+    # read in raw images
+    plot <- magick::image_read(plot_path)
+    logo_raw <- magick::image_read(logo_path)
+
+    # get dimensions of plot for scaling
+    plot_height <- magick::image_info(plot)$height
+    plot_width <- magick::image_info(plot)$width
+
+    # default scale to 1/10th width of plot
+    # Can change with logo_scale
+    logo <- magick::image_scale(logo_raw, as.character(plot_width/logo_scale))
+
+    # Get width of logo
+    logo_width <- magick::image_info(logo)$width
+    logo_height <- magick::image_info(logo)$height
+
+    # Set position of logo
+    # Position starts at 0,0 at top left
+    # Using 0.01 for 1% - aesthetic padding
+
+    if (logo_position == "top right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "top left") {
+        x_pos = 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "bottom right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    } else if (logo_position == "bottom left") {
+        x_pos = 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    }
+
+    # Compose the actual overlay
+    magick::image_composite(plot, logo, offset = paste0("+", x_pos, "+", y_pos))
+}
+```
+
+
+
+# Bundesliga data
+
+- Save "Player Standard Stats" & "Squad Standard Stats" as a `.csv` file or whatever you prefer.
+- https://fbref.com/en/comps/20/passing/Bundesliga-Stats
+
+## advanced stats
+
+
+```{r}
+epl_player_goalkeeping_stats_MD23_raw <- read_csv(here::here("data/epl_player_goalkeeping_stats_MD23.csv"),
+                                  skip = 1, col_names = TRUE) %>% 
+    select(-Matches, -Rk)
+
+epl_player_goalkeeping_stats_MD23 <- epl_player_goalkeeping_stats_MD23_raw %>% 
+  rename_at(vars(15:17), 
+            ~ glue::glue("launch_{colnames(epl_player_goalkeeping_stats_MD23_raw)[15:17]}")) %>% 
+  rename_at(vars(18:21), 
+            ~ glue::glue("pass_{colnames(epl_player_goalkeeping_stats_MD23_raw)[18:21]}")) %>% 
+  rename_at(vars(22:24), 
+            ~ glue::glue("goalkick_{colnames(epl_player_goalkeeping_stats_MD23_raw)[22:24]}")) %>% 
+  rename_at(vars(25:27), 
+            ~ glue::glue("crosses_{colnames(epl_player_goalkeeping_stats_MD23_raw)[25:27]}"))
+
+
+epl_player_goalkeeping_stats_MD23 <- epl_player_goalkeeping_stats_MD23 %>% 
+  rename_all(~str_replace_all(colnames(epl_player_goalkeeping_stats_MD23), "_[0-9]", "")) %>% 
+  rename(PSxGper90 = `/90`)
+
+glimpse(epl_player_goalkeeping_stats_MD23)
+```
+
+
+## regular stats
+
+```{r}
+epl_player_regular_goalkeeping_stats_MD23_raw <- read_csv(here::here("data/epl_player_regular_goalkeeping_stats_MD23.csv"), skip = 1, col_names = TRUE) %>% 
+    select(-Matches, -Rk)
+
+epl_player_regular_goalkeeping_stats_MD23 <- epl_player_regular_goalkeeping_stats_MD23_raw %>% 
+  separate(Player, into = c("fullname", "allname"), 
+           sep = "\\\\") %>% 
+  separate(fullname, into = c("firstname", "lastname"),
+           sep = "\\s", extra = "merge", remove = FALSE) %>%
+  mutate(fname = str_extract(firstname, "[A-Z]{1}")) %>% 
+  ## players like Fabinho listed without Tavares last name
+  mutate(player = if_else(is.na(lastname), firstname, lastname)) %>% 
+  mutate(player = case_when(
+    !is.na(lastname) ~ glue("{fname}. {lastname}"),
+    TRUE ~ firstname)) %>% 
+  select(-firstname, -fname, -lastname, -allname)
+
+
+glimpse(epl_player_regular_goalkeeping_stats_MD23)
+```
+
+
+## clean
+
+```{r}
+epl_player_goalkeeping_MD23_clean <- epl_player_goalkeeping_stats_MD23 %>% 
+  separate(Player, into = c("fullname", "allname"), sep = "\\\\") %>%   separate(fullname, into = c("firstname", "lastname"),
+           sep = "\\s", extra = "merge",
+           remove = FALSE) %>%
+  mutate(fname = str_extract(firstname, "[A-Z]{1}")) %>% 
+  ## players like Fabinho listed without Tavares last name
+  mutate(player = if_else(is.na(lastname), firstname, lastname)) %>% 
+  mutate(player = case_when(
+    !is.na(lastname) ~ glue("{fname}. {lastname}"),
+    TRUE ~ firstname)) %>% 
+  left_join(epl_player_regular_goalkeeping_stats_MD23) %>% 
+  mutate(
+    min = `90s` * 90,
+    GSAA = PSxG - GA,
+    GSAAper90 = (GSAA / min) * 90,
+    `xSave%` = (SoTA - PSxG) / SoTA,
+    GSAA_perc = `Save%` - `xSave%`,
+    minPerSave = min / Saves) %>% 
+  ## GSAA %: (SoTA - PSxG) / SoTA
+  rename(team_name = Squad) %>% 
+  ## keep fullname so can differentiate A. Gomes (Andre/Angel), etc.
+  select(-`90s`, -firstname, -fname, -lastname, -allname)
+
+glimpse(epl_player_goalkeeping_MD23_clean)
+```
+
+
+
+
+
+```{r}
+## save
+saveRDS(epl_player_goalkeeping_MD23_clean, 
+        file = glue("{here::here()}/data/epl_player_goalkeeping_MD23_clean.RDS"))
+
+epl_player_goalkeeping_MD23_clean <- readRDS(
+  file = glue("{here::here()}/data/epl_player_goalkeeping_MD23_clean.RDS"))
+```
+
+
+
+
+# plot
+
+```{r}
+epl_player_goalkeeping_MD23_clean %>% 
+  filter(min >= 900) %>% 
+  summarize(avg_psxgper90 = median(PSxGper90),
+            avg_GA = median(GA),
+            avg_GSAA = median(GSAA),
+            avg_SV_perc = median(`Save%`),
+            avg_xSV_perc = median(`xSave%`),
+            avg_minperSave = median(minPerSave),
+            avg_GSAA_perc = median(GSAA_perc))
+
+epl_player_goalkeeping_MD23_clean %>% 
+  filter(min >= 900) %>% 
+  summarize(avg_psxgper90 = mean(PSxGper90),
+            avg_GA = mean(GA),
+            avg_GSAA = mean(GSAA))
+```
+
+
+```{r}
+bad_box <- data.frame(
+  xmin = -Inf, xmax = 0, 
+  ymin = -Inf, ymax = 30.89)
+
+chance_creation_box <- data.frame(
+  xmin = -Inf, xmax = 0, 
+  ymin = 30.89, ymax = Inf)
+
+midfield_progress_box <- data.frame(
+  xmin = 0, xmax = Inf, 
+  ymin = -Inf, ymax = 30.89)
+
+dual_box <- data.frame(
+  xmin = 0, xmax = Inf, 
+  ymin = 30.89, ymax = Inf)
+```
+
+
+
+
+
+## Minutes / Save  vs. GSAA
+
+```{r}
+epl_gk <- epl_player_goalkeeping_MD23_clean %>% 
+  filter(min >= 900) %>% 
+  mutate(fillcol = case_when(
+    GSAA_perc < 0 & minPerSave < 30.89 ~ "red",
+    GSAA_perc > 0 & minPerSave < 30.89 ~ "yellow",
+    GSAA_perc < 0 & minPerSave > 30.89 ~ "orange",
+    GSAA_perc > 0 & minPerSave > 30.89 ~ "green",
+    TRUE ~ NA_character_))
+```
+
+```{r}
+point_cols <- c("yellow" = "yellow", "red" = "red",
+                "orange" = "orange", "green" = "#228B22")
+```
+
+
+```{r}
+alisson_desc <- "Alisson is proving to be the best goalkeeper this season with his 9.96 GSAA %, 83.3 Save %, 0.41 Goals Against per 90 all leading the Premier League by a considerable margin. Praise should also be given to his defenders who have only allowed opposition strikers to have 0.25 PSxG / Shot on Target, the lowest in the league."
+
+kepa_desc <- "Kepa is the least busiest keeper in the league having to only make a save every 50.49 minutes on average yet he has the 3rd worst GSAA in the league having given up 4.9 goals on shots that the post-shot model expected an average GK to save."
+
+gunn_desc <- "Angus Gunn was giving up a league-worst 2.5 Goals Against per 90 and -11.35 GSAA % before he was replaced after the horrendous 9-0 loss to Leicester City. His replacement Alex McCarthy has been doing much better with +6.6 GSAA % (3rd best in the league) and 1.31 Goals Against per 90!"
+```
+
+
+
+
+```{r fig.width = 14, fig.height = 10}
+epl_goalkeeping_MD23_plot <- epl_gk %>% 
+  ggplot(aes(x = GSAA_perc, y = minPerSave)) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 30.89) +
+  ## area fills
+  geom_rect(data = chance_creation_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "orange", alpha = 0.1) +
+  geom_rect(data = bad_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "red", alpha = 0.1) +
+  geom_rect(data = midfield_progress_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "yellow", alpha = 0.2) +
+  geom_rect(data = dual_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "green", alpha = 0.1) +
+    ## area labels
+  annotate("text", family = "Roboto Condensed", fontface = "bold",
+           x = -0.2, y = 19, 
+           hjust = 0, color = "red", size = 6,
+           label = "Busy & Saving Less Than Average GK") +
+  annotate("text", family = "Roboto Condensed", fontface = "bold",
+           x = -0.2, y = 54, 
+           hjust = 0, color = "orange", size = 6,
+           label = "Not Busy & Saving Less Than Average GK") +
+  annotate( # #7f7f00  #228B22 #CCCC00
+    "text", family = "Roboto Condensed", fontface = "bold",
+    x = 0.02, y = 54, 
+    hjust = 0, color = "#228B22", size = 6,
+    label = "Not Busy & Saving More Than Average GK") +
+  annotate(
+    "text", family = "Roboto Condensed", fontface = "bold",
+    x = 0.02, y = 19, 
+    hjust = 0, color = "#7f7f00", size = 6,
+    label = "Busy & Saving More Than Average GK") +
+  ## avg minutes per save
+  annotate(
+    "text", family = "Roboto Condensed", fontface = "bold",
+    x = -0.2, y = 31.5, 
+    hjust = 0, color = "grey20", size = 4,
+    label = "Average: 30.89 Minutes per Save") +
+  ## player data
+  geom_point(aes(fill = factor(fillcol)), 
+             shape = 21, size = 3) +
+  scale_fill_manual(values = point_cols,
+                    guide = NULL) +
+  geom_text_repel(
+    data = epl_gk %>% 
+      filter(!player %in% c("Alisson", "K. Arrizabalaga",
+                            "A. Gunn")),
+    aes(label = player, family = "Roboto Condensed", 
+        fontface = "bold", 
+        segment.color = factor(fillcol)),
+    min.segment.length = 0.3, seed = 15, size = 5,
+    point.padding = 0.6, color = "grey20") +
+  # Angus Gunn
+  geom_mark_hull(
+    aes(filter = player == "A. Gunn",
+        label = "Angus Gunn (Southampton FC)",
+        description = gunn_desc),
+    expand = unit(2.5, "mm"), con.cap = unit(0, "mm"),
+    con.colour = "red", color = "red", 
+    label.width = unit(140, 'mm'), label.buffer = unit(4.95, "mm"),
+    label.family = "Roboto Condensed", label.fontsize = c(14, 12),
+    label.colour = "grey20", label.fill = "#FFCCCC") +
+  # Alisson
+  geom_mark_hull(
+    aes(filter = player == "Alisson",
+        label = "Alisson Becker (Liverpool FC)",
+        description = alisson_desc),
+    expand = unit(2.5, "mm"), con.cap = unit(0, "mm"),
+    con.colour = "#228B22", color = "#228B22", 
+    label.width = unit(125, 'mm'), label.buffer = unit(5, "mm"),
+    label.family = "Roboto Condensed", label.fontsize = c(14, 12),
+    label.colour = "grey20", label.fill = "#cce5cc") +
+  # Sommer
+  geom_mark_hull(
+    aes(filter = player == "K. Arrizabalaga",
+        label = "Kepa Arrizabalaga (Chelsea FC)",
+        description = kepa_desc),
+    expand = unit(2.5, "mm"), con.cap = unit(0, "mm"),
+    con.colour = "orange", color = "orange",
+    label.width = unit(120, 'mm'), label.buffer = unit(5, "mm"),
+    label.family = "Roboto Condensed", label.fontsize = c(14, 12),
+    label.colour = "grey20", label.fill = "#ffe5cc") +
+  scale_x_continuous(labels = scales::percent,
+                     breaks = seq(-0.25, 0.15, 0.05),
+                     limits = c(-0.2, 0.12),
+                     expand = c(0.01, 0)) +
+  scale_y_continuous(breaks = seq(20, 56, 10),
+                     limits = c(18, 56),
+                     expand = c(0.01, 0)) +
+  ## #3d195b   #4B0082
+  labs(title = "Goalkeeper Performance & Workload: <b style='color: #3d195b'>Premier League (2019-2020)</b>",
+       subtitle = glue::glue("
+                             January 19th, 2020 | Matchday 23 | Minimum 900 Minutes Played
+                             <p>GSAA %: Whether a GK has saved more/less than the post-shot model expected an average GK to save (Actual Save % - Expected Save %)"),
+       x = "Goals Saved Above Average Percentage (GSAA %)", 
+       y = "Average Minutes per Save",
+       caption = glue::glue("
+                            Data: FBref | StatsBomb
+                            Ryo Nakagawara, Twitter: @R_by_Ryo")) +
+  theme_minimal() +
+  theme(text = element_text(family = "Roboto Condensed"),
+        plot.title = element_markdown(size = 20),
+        plot.subtitle = element_markdown(size = 16),
+        plot.caption = element_text(size = 14),
+        axis.title = element_text(size = 14),
+        axis.text = element_text(size = 12))
+
+epl_goalkeeping_MD23_plot
+```
+
+
+
+
+## save
+
+```{r}
+ggsave(plot = epl_goalkeeping_MD23_plot, 
+       here::here("Premier League 2019-2020/output/epl_goalkeeping_1920_MD23.png"),
+       height = 10, width = 14)
+```
+
+```{r}
+plot_logo <- add_logo(
+  plot_path = here::here("Premier League 2019-2020/output/epl_goalkeeping_1920_MD23.png"),
+  logo_path = "https://upload.wikimedia.org/wikipedia/en/f/f2/Premier_League_Logo.svg",
+  logo_position = "top right",
+  logo_scale = 9.5)
+
+plot_logo
+```
+
+```{r}
+image_write(image = plot_logo, 
+            here::here("Premier League 2019-2020/output/epl_goalkeeping_1920_MD23_logo.png"))
+```
+
+
+
+
+
+## all keepers
+
+```{r}
+epl_gk <- epl_player_goalkeeping_MD23_clean %>% 
+  mutate(fillcol = case_when(
+    GSAA_perc < 0 & minPerSave < 30.89 ~ "red",
+    GSAA_perc > 0 & minPerSave < 30.89 ~ "yellow",
+    GSAA_perc < 0 & minPerSave > 30.89 ~ "orange",
+    GSAA_perc > 0 & minPerSave > 30.89 ~ "green",
+    TRUE ~ NA_character_))
+```
+
+
+
+```{r fig.width = 14, fig.height = 10}
+epl_goalkeeping_MD23_plot <- epl_gk %>% 
+  ggplot(aes(x = GSAA_perc, y = minPerSave)) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 30.89) +
+  ## area fills
+  geom_rect(data = chance_creation_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "orange", alpha = 0.1) +
+  geom_rect(data = bad_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "red", alpha = 0.1) +
+  geom_rect(data = midfield_progress_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "yellow", alpha = 0.2) +
+  geom_rect(data = dual_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "green", alpha = 0.1) +
+    ## area labels
+  annotate("text", family = "Roboto Condensed", fontface = "bold",
+           x = -0.2, y = 14, 
+           hjust = 0, color = "red", size = 6,
+           label = "Busy & Saving Less Than Average GK") +
+  annotate("text", family = "Roboto Condensed", fontface = "bold",
+           x = -0.2, y = 54, 
+           hjust = 0, color = "orange", size = 6,
+           label = "Not Busy & Saving Less Than Average GK") +
+  annotate( # #7f7f00  #228B22 #CCCC00
+    "text", family = "Roboto Condensed", fontface = "bold",
+    x = 0.02, y = 54, 
+    hjust = 0, color = "#228B22", size = 6,
+    label = "Not Busy & Saving More Than Average GK") +
+  annotate(
+    "text", family = "Roboto Condensed", fontface = "bold",
+    x = 0.02, y = 14, 
+    hjust = 0, color = "#7f7f00", size = 6,
+    label = "Busy & Saving More Than Average GK") +
+  ## player data
+  geom_point(aes(fill = factor(fillcol)), 
+             shape = 21, size = 3) +
+  scale_fill_manual(values = point_cols,
+                    guide = NULL) +
+  geom_text_repel(
+    aes(label = player, family = "Roboto Condensed", 
+        fontface = "bold", 
+        segment.color = factor(fillcol)),
+    min.segment.length = 0.3, seed = 15, size = 5,
+    point.padding = 0.6, color = "grey20") +
+  scale_x_continuous(labels = scales::percent,
+                     breaks = seq(-0.3, 0.35, 0.05),
+                     limits = c(-0.3, 0.35),
+                     expand = c(0.01, 0)) +
+  scale_y_continuous(breaks = seq(20, 56, 10),
+                     limits = c(10, 56),
+                     expand = c(0.01, 0)) +
+  ## #3d195b   #4B0082
+  labs(title = "Goalkeeper Performance & Workload: <b style='color: #3d195b'>Premier League (2019-2020)</b>",
+       subtitle = glue::glue("
+                             January 19th, 2020 | Matchday 23 | ALL KEEPERS VERSION (Many have played less than 5 games...)
+                             <p>GSAA %: Whether a GK has saved more/less than the post-shot model expected an average GK to save (Actual Save % - Expected Save %)"),
+       x = "Goals Saved Above Average Percentage (GSAA %)", 
+       y = "Average Minutes per Save",
+       caption = glue::glue("
+                            Data: FBref | StatsBomb
+                            Ryo Nakagawara, Twitter: @R_by_Ryo")) +
+  theme_minimal() +
+  theme(text = element_text(family = "Roboto Condensed"),
+        plot.title = element_markdown(size = 20),
+        plot.subtitle = element_markdown(size = 16),
+        plot.caption = element_text(size = 14),
+        axis.title = element_text(size = 14),
+        axis.text = element_text(size = 12))
+
+epl_goalkeeping_MD23_plot
+```
+
+
+```{r}
+ggsave(plot = epl_goalkeeping_MD23_plot, 
+       here::here("Premier League 2019-2020/output/epl_goalkeeping_1920_ALL_KEEPERS.png"),
+       height = 10, width = 14)
+```

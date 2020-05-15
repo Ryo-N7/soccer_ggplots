@@ -1,0 +1,43 @@
+---
+title: "Visualizing the Premier League So Far, Part 2: Stats by 15-Minute Intervals"
+always_allow_html: yes
+output: 
+  md_document:
+    variant: markdown_github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+
+
+
+
+# Minutes
+
+If you've been watching Liverpool this season you might feel as though they start games off quite slow for the most part (City game aside), let's see if that assumption is actually true.
+
+
+normalized
+
+
+
+shots
+
+sure shots are a nice statistic but they only tell you the quantity of shots rather than the quality, and this is where xG can help.
+
+xG
+
+xGD
+
+
+
+which teams are finishing strong?? 76+ Minute
+
+
+
+
+

@@ -1,0 +1,387 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "1/16/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# pkgs
+
+```{r, message=FALSE, warning=FALSE}
+pacman::p_load(tidyverse, polite, scales, ggimage, 
+               ggforce, ggtext,
+               rvest, glue, extrafont, ggrepel, magick)
+loadfonts()
+```
+
+## add_logo
+
+```{r}
+add_logo <- function(plot_path, logo_path, logo_position, 
+                     logo_scale = 10){
+
+    # Requires magick R Package https://github.com/ropensci/magick
+
+    # Useful error message for logo position
+    if (!logo_position %in% c("top right", "top left", "bottom right", "bottom left")) {
+        stop("Error Message: Uh oh! Logo Position not recognized\n  Try: logo_positon = 'top left', 'top right', 'bottom left', or 'bottom right'")
+    }
+
+    # read in raw images
+    plot <- magick::image_read(plot_path)
+    logo_raw <- magick::image_read(logo_path)
+
+    # get dimensions of plot for scaling
+    plot_height <- magick::image_info(plot)$height
+    plot_width <- magick::image_info(plot)$width
+
+    # default scale to 1/10th width of plot
+    # Can change with logo_scale
+    logo <- magick::image_scale(logo_raw, as.character(plot_width/logo_scale))
+
+    # Get width of logo
+    logo_width <- magick::image_info(logo)$width
+    logo_height <- magick::image_info(logo)$height
+
+    # Set position of logo
+    # Position starts at 0,0 at top left
+    # Using 0.01 for 1% - aesthetic padding
+
+    if (logo_position == "top right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "top left") {
+        x_pos = 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "bottom right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    } else if (logo_position == "bottom left") {
+        x_pos = 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    }
+
+    # Compose the actual overlay
+    magick::image_composite(plot, logo, offset = paste0("+", x_pos, "+", y_pos))
+}
+```
+
+# Bundesliga data
+
+- Save "Player Standard Stats" & "Squad Standard Stats" as a `.csv` file or whatever you prefer.
+- https://fbref.com/en/comps/20/passing/Bundesliga-Stats
+
+### player stats
+
+
+```{r}
+buli_player_dribbling_stats_hinrunde_raw <- read_csv(here::here("data/buli_player_dribbling_stats_hinrunde.csv"),
+                                  skip = 1, col_names = TRUE)
+
+buli_player_dribbling_stats_hinrunde <- buli_player_dribbling_stats_hinrunde_raw %>% 
+  select(-Matches, -Rk) %>% 
+  select(Player, Pos, Squad, `90s`,
+         dribble_success = Succ,
+         dribble_attempt = Att,
+         dribble_perc = `Succ%`,
+         dribble_past = `#Pl`,
+         nutmegs = Megs,
+         dribble_tackled = Tkl,
+         dribble_against = Att_1,
+         tackle_success = `Tkl%`,
+         dribble_against_success = Past)
+
+glimpse(buli_player_dribbling_stats_hinrunde)
+```
+
+```{r}
+buli_player_dribbling_hinrunde_clean <- buli_player_dribbling_stats_hinrunde %>% 
+  separate(Player, into = c("fullname", "allname"), sep = "\\\\") %>%   separate(fullname, into = c("firstname", "lastname"),
+           sep = "\\s", extra = "merge",
+           remove = FALSE) %>%
+  mutate(fname = str_extract(firstname, "[A-Z]{1}")) %>% 
+  ## players like Fabinho listed without Tavares last name
+  mutate(player = if_else(is.na(lastname), firstname, lastname)) %>% 
+  mutate(player = case_when(
+    !is.na(lastname) ~ glue("{fname}. {lastname}"),
+    TRUE ~ firstname)) %>% 
+  mutate(
+    min = `90s` * 90,
+    dribble_successPer90 = (dribble_success / min) * 90,
+    dribble_attemptPer90 = (dribble_attempt / min) * 90,
+    dribble_pastPer90 = (dribble_past / min) * 90,
+    nutmegsPer90 = (nutmegs / min) * 90,
+    dribble_tackledPer90 = (dribble_tackled / min) * 90,
+    dribble_againstPer90 = (dribble_against / min) * 90,
+    dribble_against_successPer90 = (dribble_against_success / min) * 90) %>% 
+  ## keep fullname so can differentiate A. Gomes (Andre/Angel), etc.
+  select(-`90s`, -firstname, -lastname, -allname, 
+         team_name = Squad, -fname, contains("dribble"),
+         nutmegs, nutmegsPer90) 
+
+glimpse(buli_player_dribbling_hinrunde_clean)
+```
+
+
+```{r}
+## save
+saveRDS(buli_player_dribbling_hinrunde_clean, 
+        file = glue("{here::here()}/data/buli_player_dribbling_hinrunde_clean.RDS"))
+
+buli_player_dribbling_hinrunde_clean <- readRDS(
+  file = glue("{here::here()}/data/buli_player_dribbling_hinrunde_clean.RDS"))
+```
+
+
+
+# plot
+
+
+```{r}
+buli_player_dribbling_hinrunde_clean %>% 
+  filter(min >= 900,
+         dribble_attemptPer90 > 2) %>% 
+  summarize(avg_dribblesper90 = median(dribble_attemptPer90),
+            avg_dribble_successper90 = median(dribble_successPer90),
+            avg_dribble_rate = median(dribble_perc))
+
+buli_player_dribbling_hinrunde_clean %>% 
+  filter(min >= 900,
+         dribble_attemptPer90 > 2,
+         Pos %in% c("FW", "FWMF")) %>% 
+  summarize(avg_dribblesper90 = median(dribble_attemptPer90),
+            avg_dribble_successper90 = median(dribble_successPer90),
+            avg_dribble_rate = median(dribble_perc))
+```
+
+- when filtering for FW/Attacking MFs, F3 falls and PPA rises - fairly self-explanatory and reasonable
+
+```{r}
+bad_box <- data.frame(
+  xmin = -Inf, xmax = 3.36, 
+  ymin = -Inf, ymax = 60.45)
+
+chance_creation_box <- data.frame(
+  xmin = -Inf, xmax = 3.36, 
+  ymin = 60.45, ymax = Inf)
+
+midfield_progress_box <- data.frame(
+  xmin = 3.36, xmax = Inf, 
+  ymin = -Inf, ymax = 60.45)
+
+dual_box <- data.frame(
+  xmin = 3.36, xmax = Inf, 
+  ymin = 60.45, ymax = Inf)
+```
+
+
+```{r}
+buli_dribble_df <- buli_player_dribbling_hinrunde_clean %>% 
+  filter(min >= 900,
+         dribble_attemptPer90 > 2) %>% 
+  mutate(fillcol = case_when(
+    dribble_attemptPer90 < 3.36 & dribble_perc < 60.45 ~ "red",
+    dribble_attemptPer90 > 3.36 & dribble_perc < 60.45 ~ "orange",
+    dribble_attemptPer90 < 3.36 & dribble_perc > 60.45 ~ "yellow",
+    dribble_attemptPer90 > 3.36 & dribble_perc > 60.45 ~ "green",
+    TRUE ~ NA_character_))
+```
+
+```{r}
+point_cols <- c("yellow" = "yellow", "red" = "red",
+                "orange" = "orange", "green" = "#228B22")
+```
+
+
+```{r}
+bayern_desc <- "Both Kimmich & Alaba have been playing much more centrally this season (Center Midfield & Center Back respectively) the former only behind teammate Coutinho and Brandt in Passes into the Penalty Area per 90 with the latter leading the league with 9.83 Passes into the Final 3rd per 90. Thiago keeps things ticking in midfield with a 90.2% Pass Accuracy."
+
+brandt_desc <- "Julian Brandt has become the primary ball progressor in this Dortmund side with his 2.99 PPA per 90 leading the league by a considerable margin. A lot of this comes from his throughballs (0.68 Through Balls per 90, 1st in the league). Along with his 7th and 4th ranking (within BVB) in Final Third Passes per 90 & xA per 90 respectively, it shows that he provides the incisive ball in between the build-up & the final pass. Indeed, his 1.45 KP per 90 is 4th in the team behind Hazard, Sancho, & Hakimi."
+```
+
+
+
+```{r  fig.width = 14, fig.height = 10}
+buli_dribbling_hinrunde_plot <- ggplot(
+  buli_dribble_df, 
+  aes(x = dribble_attemptPer90, y = dribble_perc)) +
+  ## area fills
+  geom_rect(data = chance_creation_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "yellow", alpha = 0.1) +
+  geom_rect(data = bad_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "red", alpha = 0.1) +
+  geom_rect(data = midfield_progress_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "orange", alpha = 0.2) +
+  geom_rect(data = dual_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "green", alpha = 0.1) +
+  ## median reference lines
+  geom_hline(yintercept = 60.45, color = "grey20", alpha = 0.4) +
+  geom_vline(xintercept = 3.35, color = "grey20", alpha = 0.4) +
+  ## player data
+  geom_point(aes(color = factor(fillcol)), size = 3) +
+  scale_color_manual(values = point_cols) +
+  ## league average
+  annotate("text", family = "Roboto Condensed", fontface = "bold",
+           x = 7.35, y = 61, hjust = 0, color = "grey20",
+           label = "Average OP Passes into the Final Third per 90: 2.5") +
+  annotate("text", family = "Roboto Condensed", fontface = "bold",
+           x = 3.35, y = 105, hjust = 0, color = "grey20",
+           label = "Average OP Passes into Penalty Area per 90: 0.48") +
+  ## area labels
+  annotate("text", family = "Roboto Condensed", fontface = "bold",
+           x = 0.25, y = 3.8, 
+           hjust = 0, color = "#CCCC00", size = 6,
+           label = "Good Chance Creation") +
+  annotate("text", family = "Roboto Condensed", fontface = "bold",
+           x = 9.2, y = 0.2, 
+           hjust = 0, color = "orange", size = 6,
+           label = "Good Midfield Progression") +
+  annotate(
+    "text", family = "Roboto Condensed", fontface = "bold",
+    x = 9.2, y = 3.77, 
+    hjust = 0, color = "#228B22", size = 6,
+    label = "Good Chance Creation\nGood Midfield Progression") +
+  ## player labels
+  geom_text_repel(
+    data = buli_dribble_df %>% 
+      filter(dribble_attemptPer90 > 2 | dribble_perc > 60.45,
+             !player %in% c("J. Sancho", "M. Rashica",
+                            "A. Davies", "T. Alcántara")),
+    aes(label = player, family = "Roboto Condensed", 
+        fontface = "bold", 
+        segment.color = factor(fillcol)),
+    min.segment.length = 0.3, seed = 15, size = 3.5,
+    #segment.color = "red", 
+    point.padding = 0.6,
+    color = "grey20") +
+  # ## Bayern description
+  geom_mark_hull(
+    aes(filter = player == "J. Sancho",
+        label = "Jaden Sancho: Dribble Koenig",
+        description = "bayern_desc"),
+    expand = unit(2.5, "mm"), con.cap = unit(0, "mm"),
+    con.colour = "orange", color = "orange",
+    label.width = unit(70, 'mm'), label.buffer = unit(10, "mm"),
+    label.family = "Roboto Condensed", label.fontsize = c(14, 12),
+    label.colour = "grey20", label.fill = "#cce5cc") +
+  # ## Brandt description #7fbf7f #b2d8b2
+  geom_mark_hull(
+    aes(filter = player == "A. Davies",
+        label = "Alphonso Davies: Canada's ",
+        description = "brandt_desc"),
+    expand = unit(2.5, "mm"), con.cap = unit(0, "mm"),
+    con.colour = "#228B22", color = "#228B22",
+    label.width = unit(50, 'mm'), label.buffer = unit(60, "mm"),
+    label.family = "Roboto Condensed", label.fontsize = c(14, 12),
+    label.colour = "grey20", label.fill = "#cce5cc") +
+  # ## Brandt description #7fbf7f #b2d8b2
+  geom_mark_hull(
+    aes(filter = player == "T. Alcántara",
+        label = "Alcántara: Efficient Dribbler.",
+        description = "brandt_desc"),
+    expand = unit(2.5, "mm"), con.cap = unit(0, "mm"),
+    label.width = unit(90, 'mm'), label.buffer = unit(5, "mm"),
+    label.family = "Roboto Condensed", label.fontsize = c(14, 12),
+    label.colour = "grey20", label.fill = "#cce5cc") +
+  # ## Bayern description
+  geom_mark_hull(
+    aes(filter = player == "M. Rashica",
+        label = "Milot Rashica: Dribble Koenig",
+        description = "bayern_desc"),
+    expand = unit(2.5, "mm"), con.cap = unit(0, "mm"),
+    label.width = unit(70, 'mm'), label.buffer = unit(30, "mm"),
+    label.family = "Roboto Condensed", label.fontsize = c(14, 12),
+    label.colour = "grey20", label.fill = "#cce5cc") +
+  ## Bayern player labels
+  # geom_text_repel(
+  #   data = buli_player_dribbling_hinrunde_clean %>%
+  #     filter(min >= 900, 
+  #            player %in% c("J. Kimmich", 
+  #                              "D. Alaba", 
+  #                              "T. Alcántara",
+  #                              "P. Coutinho")),
+  #   aes(label = player, family = "Roboto Condensed", 
+  #       fontface = "bold"),
+  #   seed = 15, size = 4.5, color = "red",
+  #   min.segment.length = 0, segment.color = "red",
+  #   point.padding = 0.5, nudge_x = 0.6) +
+  ## scales
+  scale_x_continuous(labels = seq(0, 10, 0.5), 
+                     breaks = seq(0, 10, 0.5),
+                     limits = c(1.25, 10),
+                     expand = c(0.01, 0)) +
+  scale_y_continuous(labels = seq(0, 100, 10), 
+                     breaks = seq(0, 100, 10),
+                     limits = c(30, 110),
+                     expand = c(0.01, 0)) +
+  labs(title = "Dribble Volume vs. Dribble Success: <b style='color: red'>Bundesliga (2019-2020)</b>", 
+       subtitle = glue("
+                       Hinrunde | January 16th, 2020
+                       <p><b style='color: grey20'>Average (Median)</b> | Minimum 900 Minutes Played | More than 2 dribble per 90"),
+       caption = glue("
+                      Data: FBref | StatsBomb
+                      Ryo Nakagawara, Twitter: @R_by_Ryo"),
+       x = "Dribbles Attempted per 90",
+       y = "Dribble Success Rate (%)") +
+  theme_minimal() +
+  theme(text = element_markdown(family = "Roboto Condensed"),
+        plot.title = element_markdown(size = 20),
+        plot.subtitle = element_markdown(size = 16),
+        plot.caption = element_text(size = 14),
+        axis.title = element_text(size = 14),
+        axis.text = element_text(size = 12))
+
+buli_dribbling_hinrunde_plot
+```
+
+
+
+
+
+
+## save
+
+```{r}
+ggsave(plot = buli_dribbling_hinrunde_plot, 
+       here::here("Bundesliga 2019-2020/output/buli_dribbling_1920_hinrunde.png"),
+       height = 10, width = 14)
+```
+
+```{r}
+plot_logo <- add_logo(
+  plot_path = here::here("Bundesliga 2019-2020/output/buli_dribbling_1920_hinrunde.png"),
+  logo_path = here::here("../soccer_match_reports/img/Bundesliga_logo_(2017).svg"),
+  logo_position = "top right",
+  logo_scale = 18)
+
+plot_logo
+```
+
+```{r}
+image_write(image = plot_logo, 
+            here::here("Bundesliga 2019-2020/output/buli_dribbling_1920_hinrunde_logo.png"))
+```
+
+
+
+
+
+
+
+

@@ -1,0 +1,1976 @@
+---
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Packages
+```{r, message=FALSE, warning=FALSE}
+pacman::p_load(tidyverse, polite, scales, ggimage, rvest, 
+               glue, extrafont, showtext, ggrepel, magick, 
+               ggforce, lubridate, cowplot, patchwork, rlang)
+loadfonts()
+```
+
+# functions
+
+## add_logo functions
+
+```{r}
+add_logo <- function(plot_path, logo_path, logo_position, logo_scale = 10){
+
+    # Requires magick R Package https://github.com/ropensci/magick
+
+    # Useful error message for logo position
+    if (!logo_position %in% c("top right", "top left", "bottom right", "bottom left")) {
+        stop("Error Message: Uh oh! Logo Position not recognized\n  Try: logo_positon = 'top left', 'top right', 'bottom left', or 'bottom right'")
+    }
+
+    # read in raw images
+    plot <- magick::image_read(plot_path)
+    logo_raw <- magick::image_read(logo_path)
+
+    # get dimensions of plot for scaling
+    plot_height <- magick::image_info(plot)$height
+    plot_width <- magick::image_info(plot)$width
+
+    # default scale to 1/10th width of plot
+    # Can change with logo_scale
+    logo <- magick::image_scale(logo_raw, as.character(plot_width/logo_scale))
+
+    # Get width of logo
+    logo_width <- magick::image_info(logo)$width
+    logo_height <- magick::image_info(logo)$height
+
+    # Set position of logo
+    # Position starts at 0,0 at top left
+    # Using 0.01 for 1% - aesthetic padding
+
+    if (logo_position == "top right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "top left") {
+        x_pos = 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "bottom right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    } else if (logo_position == "bottom left") {
+        x_pos = 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    }
+
+    # Compose the actual overlay
+    magick::image_composite(plot, logo, offset = paste0("+", x_pos, "+", y_pos))
+
+}
+```
+
+## tategaki function
+
+```{r}
+tategaki <- function(x){
+  x <- chartr("ー", "丨", x) # 長音符の処理
+  x <- strsplit(split="", x)
+  sapply(x, paste, collapse="\n")
+}
+
+tategaki_alt <- function(x){
+  x <- stringr::str_replace_all(x, "ー", "丨") # 長音符の処理
+  stringr::str_wrap(x, width = 1)
+}
+```
+
+
+
+
+# FC Tokyo
+
+## scrape Tokyo
+
+```{r}
+session <- bow("https://www.transfermarkt.com/fc-tokyo/leistungsdaten/verein/6631/plus/0?reldata=JAP1%262018")
+
+print(session)
+
+# grab name from photo element instead
+result_name <- scrape(session) %>% 
+  html_nodes("#yw1 .bilderrahmen-fixed") %>% 
+  html_attr("title") 
+
+# grab age
+result_age <- scrape(session) %>% 
+  html_nodes(".posrela+ .zentriert") %>% 
+  html_text()
+
+# grab minutes played in league
+result_mins <- scrape(session) %>% 
+  html_nodes("td.rechts") %>% 
+  html_text()
+```
+
+
+## scrape length
+
+```{r}
+session <- bow("https://www.transfermarkt.com/fc-tokyo/kader/verein/6631/plus/1/galerie/0?saison_id=2018")
+
+result_name2 <- scrape(session) %>% 
+  html_nodes("#yw1 .bilderrahmen-fixed") %>% 
+  html_attr("title") 
+
+result_bday <- scrape(session) %>% 
+  html_nodes(".posrela+ .zentriert") %>% 
+  html_text()
+
+result_joinedteam <- scrape(session) %>% 
+  html_nodes("td:nth-child(8)") %>% 
+  html_text()
+
+result_leaveteam <- scrape(session) %>% 
+  html_nodes("td:nth-child(10)") %>% 
+  html_text()
+```
+
+
+
+
+
+## clean tokyo
+
+```{r}
+# place each vector into list
+resultados <- list(result_name, result_age, result_mins)
+
+col_name <- c("name", "age", "minutes")
+
+results_comb <- resultados %>% 
+  reduce(cbind) %>% 
+  as_tibble() %>% 
+  set_names(col_name)
+
+## join + bday
+resultados2 <- list(result_name2, result_bday, 
+                    result_joinedteam, result_leaveteam)
+
+col_name2 <- c("name", "bday", "join", "leave")
+
+results_comb2 <- resultados2 %>% 
+  reduce(cbind) %>% 
+  as_tibble() %>% 
+  set_names(col_name2)
+
+## combine BOTH
+results_comb <- results_comb %>% 
+  left_join(results_comb2) 
+
+# fix "strings" into proper formats, calculate % of minutes appeared
+tokyo_minutes <- results_comb %>% 
+  mutate(age = as.numeric(age),
+         minutes = minutes %>% 
+           str_replace("\\.", "") %>% 
+           str_replace("'", "") %>% 
+           as.numeric(),
+         min_perc = (minutes / 3060) %>% round(digits = 3),
+         bday = str_replace_all(bday, "\\(.*\\)", "") %>% mdy(),
+         join = join %>% mdy(),
+         join_age = case_when(
+           name == "Hirotaka Mita" ~ 29,
+           TRUE ~ interval(bday, join) / years(1)),
+         age_now = case_when(
+           name == "Takefusa Kubo" ~ 17,
+           TRUE ~ interval(bday, Sys.Date()) / years(1))) %>% 
+  filter(!is.na(minutes)) %>% 
+  separate(name, into = c("first_name", "last_name"), 
+           sep = " ", fill = "left") %>%
+  mutate(join_age = case_when(
+           last_name == "Oh" ~ 29,
+           TRUE ~ join_age),
+         fname = if_else(!is.na(first_name), 
+                         str_extract(first_name, "[A-Z]{1}"),
+                         ""),
+         player = case_when(
+    !is.na(first_name) ~ glue("{fname}. {last_name}"),
+    TRUE ~ last_name),
+    team_name = "FC Tokyo") %>% 
+  arrange(desc(min_perc))
+
+glimpse(tokyo_minutes)
+```
+
+```{r}
+saveRDS(tokyo_minutes, here::here("data/FCTokyo_2019_age_utility_df.RDS"))
+```
+
+
+
+## plot Tokyo
+
+"ピーク年齢"
+
+```{r fig.height=8, fig.width=12}
+# font_add_google("Noto Sans", "Noto Sans")
+# showtext_auto()
+
+# rectanglular highlight for players in their prime:
+rect_df <- data.frame(
+  xmin = 25, xmax = 29,
+  ymin = 0, ymax = 1
+)
+
+fctokyo_plot <- tokyo_minutes %>% 
+  ggplot(aes(x = age_now, y = min_perc)) +
+  geom_vline(xintercept = 25, alpha = 0.4, color = "grey20") +
+  geom_hline(yintercept = 0.5, alpha = 0.4, color = "grey20") +
+  geom_rect(data = rect_df,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "#271672", alpha = 0.4) +
+  geom_link(aes(x = join_age, xend = age_now,
+                y = min_perc, yend = min_perc,
+                alpha = stat(index)), 
+            color = "#DD2220", size = 1.75) + 
+  geom_point(aes(x = age_now), color = "#DD2220", size = 3.5) +
+  geom_text_repel(
+    aes(label = player),
+    nudge_y = 0.01, 
+    seed = 6) + 
+  annotate("text", x = 27, y = 1.055,
+           size = 5.5, fontface = "bold",
+           family = "Yu Mincho Demibold",
+           label = "ピーク年齢", color = "grey20") +
+  scale_y_continuous(
+    expand = c(0.01, 0),
+    limits = c(0, 1.08), 
+    breaks = seq(0, 1, by = 0.2), 
+    labels = percent_format()) +
+  scale_x_continuous(
+    limits = c(16, 33),
+    breaks = seq(18, 34, by = 2)) +
+  labs(
+    x = "年齢", 
+    y = tategaki_alt("出場時間 (%)"),  
+    title = "FC東京: 年齢-出場時間",
+    subtitle = "J-League 2019 Season (100% = 3060分)") +
+  theme_bw() +
+  theme(
+    text = element_text(family = "Yu Mincho Demibold"),
+    panel.border = element_blank(),
+    plot.title = element_text(color = "#271672", size = 20, face = "bold"),
+    plot.subtitle = element_text(color = "#DD2220", size = 18),
+    plot.caption = element_text(size = 14),
+    panel.grid.minor = element_blank(),
+    axis.title.y = element_text(angle = 0, vjust= 0.5),
+    axis.title = element_text(size = 16),
+    axis.text = element_text(size = 14),
+    axis.ticks = element_blank(),
+    legend.position = "none")
+
+fctokyo_plot
+```
+
+```{r}
+ggsave(plot = fctokyo_plot, "../J-League 2020/output/fctokyo_plot.png",
+       height = 8, width = 12)
+```
+
+
+
+```{r}
+plot_logo <- add_logo(plot_path = "../J-League 2020/output/fctokyo_plot.png",
+                      logo_path = "https://upload.wikimedia.org/wikipedia/en/4/45/FCTokyo.png",
+                      logo_position = "top right",
+                      logo_scale = 23)
+
+plot_logo
+```
+
+```{r}
+image_write(image = plot_logo, "../J-League 2020/output/fctokyo_logo_plot.png")
+```
+
+
+## legend plot
+
+```{r fig.width=3, fig.height=5}
+leg_df <- tibble(x = 23, xend = 28,
+                 y = 0.65, yend = 0.65)
+
+
+legend_plot <- tokyo_minutes %>% 
+  ggplot(aes(x = age_now, y = min_perc)) +
+  geom_rect(data = rect_df,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "#271672", alpha = 0.4) +
+  geom_link(data = leg_df,
+            aes(x = x, xend = xend,
+                y = y, yend = yend,
+                alpha = stat(index)), 
+            color = "#DD2220", size = 1.75) + 
+  geom_point(x = 28, y = 0.65, color = "#DD2220", size = 3.5) +
+  ## top arrow
+  geom_curve(x = 30, xend = 28.4,
+             y = 0.77, yend = 0.65,
+             curvature = -0.5, size = 1.2,
+             arrow = arrow(length = unit(0.1, "inches")),
+             lineend = "round") +
+  ## bottom arrow
+  geom_segment(x = 23, xend = 23,
+               y = 0.48, yend = 0.63,
+               size = 1.2,
+               arrow = arrow(length = unit(0.1, "inches")),
+               lineend = "round") +
+  annotate("text", x = 30, y = 0.83, family = "Yu Mincho Demibold",
+           label = "年齢", size = 4.5) +
+  annotate("text", x = 23, y = 0.4, family = "Yu Mincho Demibold",
+           label = "年齢 （入団時）", size = 4.5) +
+  scale_y_continuous(
+    limits = c(0, 1.05), 
+    breaks = seq(0, 1, by = 0.2),
+    labels = percent_format()) +
+  scale_x_continuous(
+    limits = c(18, 33),
+    breaks = seq(18, 34, by = 2)) +
+  labs(caption = glue("
+                   データ: transfermarkt.com
+                   作: @R_by_Ryo")) +
+  theme_bw() +
+  theme(
+    text = element_text(family = "Yu Mincho Demibold"),
+    panel.border = element_blank(),
+    plot.caption = element_text(size = 14),
+    axis.ticks = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_text(size = 10),
+    legend.position = "none")
+
+legend_plot
+```
+
+
+
+## age histogram
+
+
+```{r fig.width=3, fig.height=5}
+tokyo_minutes %>% 
+  mutate(team = "FC Tokyo") %>% 
+  select(team, age) %>% 
+  #spread("team", "age") %>% 
+  ggplot(aes(x = age, y = team), groupOnX = TRUE) +
+  ggbeeswarm::geom_beeswarm()
+
+
+tokyo_minutes %>% 
+  ggplot(aes(age)) +
+  geom_freqpoly(binwidth = 1.5)
+
+
+tokyo_minutes %>% 
+  mutate(team = "FC Tokyo") %>% 
+  ggplot(aes(age, team)) +
+  ggridges::geom_density_ridges(scale = 4) +
+  scale_y_discrete(expand = c(0.05, 0))
+
+
+tokyo_minutes %>% 
+  add_count(age) %>% 
+  ggplot(aes(as.factor(age), n)) +
+  ggridges::geom_density_ridges()
+  mutate(team = "FC Tokyo") %>% 
+  group_by(age) %>% 
+  summarize(tot = n()) %>% 
+  ungroup() %>% 
+  ggplot(aes(age, tot, height = tot)) +
+  ggridges::geom_ridgeline()
+  
+  
+tokyo_minutes %>% 
+  add_count(age) %>% 
+  ggplot(aes(as.factor(age), n)) +
+  geom_col()
+
+tokyo_minutes %>% 
+  ggplot(aes(age)) +
+  geom_density(#aes(y = ..count..), 
+               fill = "grey20") +
+  geom_vline(aes(xintercept = median(age)), color = "red") +
+  scale_x_continuous(limits = c(8, 40)) +
+  scale_y_continuous(limits = c(0, 0.1))
+```
+
+
+## summary stats
+
+```{r fig.width=3, fig.height=5}
+tokyo_minutes %>% 
+  mutate(duration = age_now - join_age) %>% 
+  summarize(median_age = median(age),
+            median_duration = median(duration),
+            sum_players = n())
+```
+
+```{r fig.width=3, fig.height=5}
+summary_stats <- tokyo_minutes %>%
+  ggplot(aes(x = age_now, y = min_perc)) +
+  annotate("text", x = 25, y = 0.75, 
+           size = 4,
+           label = "Number of Players: 25",
+           family = "Yu Mincho Demibold") +
+  annotate("text", x = 25, y = 0.65, 
+           size = 4,
+           label = "Median Age: 24",
+           family = "Yu Mincho Demibold") +
+  annotate("text", x = 25, y = 0.55, 
+           size = 4,
+           label = "Median Length of Stay: 2.59 Years",
+           family = "Yu Mincho Demibold") +
+  theme_void()
+
+summary_stats
+```
+
+
+## combine
+
+
+```{r fig.height=8, fig.width=12}
+fctokyo_plot +
+  theme(plot.margin = unit(c(1, 10, 1, 1), "cm"))
+
+legend_plot
+```
+
+
+
+
+```{r fig.width=15, fig.height=8}
+ggdraw(plot_grid(fctokyo_plot, legend_plot, 
+                 rel_heights = c(2, 1)))
+
+
+ggdraw() +
+  draw_plot(fctokyo_plot) +
+  draw_plot(legend_plot, hjust = 10, 
+            width = 0.13, height = 0.2)
+
+
+ggdraw(fctokyo_plot +
+  theme(plot.margin = unit(c(1, 10, 1, 1), "cm"))) +
+  draw_plot(legend_plot, 1, 0,
+            width = 0.13, height = 0.2)
+```
+
+
+
+```{r fig.width=15, fig.height=8}
+layout <- "
+AAAA##
+AAAAC#
+AAAA##
+AAAAB#
+"
+
+combined_plot <- fctokyo_plot + legend_plot + summary_stats + 
+  plot_layout(design = layout)
+
+combined_plot
+```
+
+## save
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/fctokyo_combplot.png",
+       height = 8, width = 15)
+```
+
+
+
+```{r}
+plot_logo <- add_logo(plot_path = "../J-League 2020/output/fctokyo_combplot.png",
+                      logo_path = "https://upload.wikimedia.org/wikipedia/en/4/45/FCTokyo.png",
+                      logo_position = "top right",
+                      logo_scale = 23)
+
+plot_logo
+```
+
+```{r}
+image_write(image = plot_logo, "../J-League 2020/output/fctokyo_logo_combplot.png")
+```
+
+
+
+# Kashiwa Reysol
+
+## scrape reysol
+
+```{r}
+session <- bow("https://www.transfermarkt.com/kashiwa-reysol/leistungsdaten/verein/6632/plus/1?reldata=JAP2%262018")
+
+print(session)
+
+# grab name from photo element instead
+result_name <- scrape(session) %>% 
+  html_nodes("#yw1 .bilderrahmen-fixed") %>% 
+  html_attr("title") 
+
+# grab age
+result_age <- scrape(session) %>% 
+  html_nodes(".posrela+ .zentriert") %>% 
+  html_text()
+
+# grab minutes played in league
+result_mins <- scrape(session) %>% 
+  html_nodes("td.rechts") %>% 
+  html_text()
+```
+
+
+## scrape length
+
+```{r}
+session <- bow("https://www.transfermarkt.com/kashiwa-reysol/kader/verein/6632/plus/1/galerie/0?saison_id=2018")
+
+result_name2 <- scrape(session) %>% 
+  html_nodes("#yw1 .bilderrahmen-fixed") %>% 
+  html_attr("title") 
+
+result_bday <- scrape(session) %>% 
+  html_nodes(".posrela+ .zentriert") %>% 
+  html_text()
+
+result_joinedteam <- scrape(session) %>% 
+  html_nodes("td:nth-child(8)") %>% 
+  html_text()
+
+result_leaveteam <- scrape(session) %>% 
+  html_nodes("td:nth-child(10)") %>% 
+  html_text()
+```
+
+
+
+
+
+## clean reysol
+
+```{r}
+# place each vector into list
+resultados <- list(result_name, result_age, result_mins)
+
+col_name <- c("name", "age", "minutes")
+
+results_comb <- resultados %>% 
+  reduce(cbind) %>% 
+  as_tibble() %>% 
+  set_names(col_name)
+
+## join + bday
+resultados2 <- list(result_name2, result_bday, 
+                    result_joinedteam, result_leaveteam)
+
+col_name2 <- c("name", "bday", "join", "leave")
+
+results_comb2 <- resultados2 %>% 
+  reduce(cbind) %>% 
+  as_tibble() %>% 
+  set_names(col_name2)
+
+## combine BOTH
+results_comb <- results_comb %>% 
+  left_join(results_comb2) 
+
+# fix "strings" into proper formats, calculate % of minutes appeared
+reysol_minutes <- results_comb %>% 
+  mutate(age = as.numeric(age),
+         minutes = minutes %>% 
+           str_replace("\\.", "") %>% 
+           str_replace("'", "") %>% 
+           as.numeric(),
+         min_perc = (minutes / 3060) %>% round(digits = 3),
+         bday = str_replace_all(bday, "\\(.*\\)", "") %>% mdy(),
+         join = join %>% mdy(),
+         join_age = case_when(
+           name == "Hirotaka Mita" ~ 29,
+           TRUE ~ interval(bday, join) / years(1)),
+         age_now = case_when(
+           name == "Takefusa Kubo" ~ 17,
+           TRUE ~ interval(bday, Sys.Date()) / years(1))) %>% 
+  filter(!is.na(minutes)) %>% 
+  separate(name, into = c("first_name", "last_name"), 
+           sep = " ", fill = "left") %>%
+  mutate(join_age = case_when(
+           last_name == "Oh" ~ 29,
+           TRUE ~ join_age),
+         fname = if_else(!is.na(first_name), 
+                         str_extract(first_name, "[A-Z]{1}"),
+                         ""),
+         player = case_when(
+    !is.na(first_name) ~ glue("{fname}. {last_name}"),
+    TRUE ~ last_name),
+    team_name = "Kashiwa Reysol") %>% 
+  arrange(desc(min_perc))
+
+glimpse(reysol_minutes)
+```
+
+
+
+
+# Jubilo Iwata
+
+## scrape jubilo
+
+```{r}
+session <- bow("https://www.transfermarkt.com/jubilo-iwata/leistungsdaten/verein/937/plus/1?reldata=JAP1%262018")
+
+print(session)
+
+# grab name from photo element instead
+result_name <- scrape(session) %>% 
+  html_nodes("#yw1 .bilderrahmen-fixed") %>% 
+  html_attr("title") 
+
+# grab age
+result_age <- scrape(session) %>% 
+  html_nodes(".posrela+ .zentriert") %>% 
+  html_text()
+
+# grab minutes played in league
+result_mins <- scrape(session) %>% 
+  html_nodes("td.rechts") %>% 
+  html_text()
+```
+
+
+## scrape length
+
+```{r}
+session <- bow("https://www.transfermarkt.com/jubilo-iwata/kader/verein/937/saison_id/2018/plus/1")
+
+result_name2 <- scrape(session) %>% 
+  html_nodes("#yw1 .bilderrahmen-fixed") %>% 
+  html_attr("title") 
+
+result_bday <- scrape(session) %>% 
+  html_nodes(".posrela+ .zentriert") %>% 
+  html_text()
+
+result_joinedteam <- scrape(session) %>% 
+  html_nodes("td:nth-child(8)") %>% 
+  html_text()
+
+result_leaveteam <- scrape(session) %>% 
+  html_nodes("td:nth-child(10)") %>% 
+  html_text()
+```
+
+## clean jubilo
+
+```{r}
+# place each vector into list
+resultados <- list(result_name, result_age, result_mins)
+
+col_name <- c("name", "age", "minutes")
+
+results_comb <- resultados %>% 
+  reduce(cbind) %>% 
+  as_tibble() %>% 
+  set_names(col_name)
+
+## join + bday
+resultados2 <- list(result_name2, result_bday, 
+                    result_joinedteam, result_leaveteam)
+
+col_name2 <- c("name", "bday", "join", "leave")
+
+results_comb2 <- resultados2 %>% 
+  reduce(cbind) %>% 
+  as_tibble() %>% 
+  set_names(col_name2)
+
+## combine BOTH
+results_comb <- results_comb %>% 
+  left_join(results_comb2) 
+
+# fix "strings" into proper formats, calculate % of minutes appeared
+jubilo_minutes <- results_comb %>% 
+  mutate(age = as.numeric(age),
+         minutes = minutes %>% 
+           str_replace("\\.", "") %>% 
+           str_replace("'", "") %>% 
+           as.numeric(),
+         min_perc = (minutes / 3060) %>% round(digits = 3),
+         bday = str_replace_all(bday, "\\(.*\\)", "") %>% mdy(),
+         join = join %>% mdy(),
+         join_age = case_when(
+           name == "Hirotaka Mita" ~ 29,
+           TRUE ~ interval(bday, join) / years(1)),
+         age_now = case_when(
+           name == "Takefusa Kubo" ~ 17,
+           TRUE ~ interval(bday, Sys.Date()) / years(1))) %>% 
+  filter(!is.na(minutes)) %>% 
+  separate(name, into = c("first_name", "last_name"), 
+           sep = " ", fill = "left") %>%
+  mutate(join_age = case_when(
+           last_name == "Oh" ~ 29,
+           TRUE ~ join_age),
+         fname = if_else(!is.na(first_name), 
+                         str_extract(first_name, "[A-Z]{1}"),
+                         ""),
+         player = case_when(
+    !is.na(first_name) ~ glue("{fname}. {last_name}"),
+    TRUE ~ last_name),
+    team_name = "Jubilo Iwata") %>% 
+  arrange(desc(min_perc))
+
+glimpse(jubilo_minutes)
+```
+
+
+
+
+# Matsumoto Yamagaa
+
+## scrape yamaga
+
+```{r}
+session <- bow("https://www.transfermarkt.com/matsumoto-yamaga/leistungsdaten/verein/25765/plus/1?reldata=JAP1%262018")
+
+print(session)
+
+# grab name from photo element instead
+result_name <- scrape(session) %>% 
+  html_nodes("#yw1 .bilderrahmen-fixed") %>% 
+  html_attr("title") 
+
+# grab age
+result_age <- scrape(session) %>% 
+  html_nodes(".posrela+ .zentriert") %>% 
+  html_text()
+
+# grab minutes played in league
+result_mins <- scrape(session) %>% 
+  html_nodes("td.rechts") %>% 
+  html_text()
+```
+
+
+## scrape length
+
+```{r}
+session <- bow("https://www.transfermarkt.com/matsumoto-yamaga/kader/verein/25765/saison_id/2018/plus/1")
+
+result_name2 <- scrape(session) %>% 
+  html_nodes("#yw1 .bilderrahmen-fixed") %>% 
+  html_attr("title") 
+
+result_bday <- scrape(session) %>% 
+  html_nodes(".posrela+ .zentriert") %>% 
+  html_text()
+
+result_joinedteam <- scrape(session) %>% 
+  html_nodes("td:nth-child(8)") %>% 
+  html_text()
+
+result_leaveteam <- scrape(session) %>% 
+  html_nodes("td:nth-child(10)") %>% 
+  html_text()
+```
+
+## clean yamaga
+
+```{r}
+# place each vector into list
+resultados <- list(result_name, result_age, result_mins)
+
+col_name <- c("name", "age", "minutes")
+
+results_comb <- resultados %>% 
+  reduce(cbind) %>% 
+  as_tibble() %>% 
+  set_names(col_name)
+
+## join + bday
+resultados2 <- list(result_name2, result_bday, 
+                    result_joinedteam, result_leaveteam)
+
+col_name2 <- c("name", "bday", "join", "leave")
+
+results_comb2 <- resultados2 %>% 
+  reduce(cbind) %>% 
+  as_tibble() %>% 
+  set_names(col_name2)
+
+## combine BOTH
+results_comb <- results_comb %>% 
+  left_join(results_comb2) 
+
+# fix "strings" into proper formats, calculate % of minutes appeared
+yamaga_minutes <- results_comb %>% 
+  mutate(age = as.numeric(age),
+         minutes = minutes %>% 
+           str_replace("\\.", "") %>% 
+           str_replace("'", "") %>% 
+           as.numeric(),
+         min_perc = (minutes / 3060) %>% round(digits = 3),
+         bday = str_replace_all(bday, "\\(.*\\)", "") %>% mdy(),
+         join = join %>% mdy(),
+         join_age = case_when(
+           name == "Hirotaka Mita" ~ 29,
+           TRUE ~ interval(bday, join) / years(1)),
+         age_now = case_when(
+           name == "Takefusa Kubo" ~ 17,
+           TRUE ~ interval(bday, Sys.Date()) / years(1))) %>% 
+  filter(!is.na(minutes)) %>% 
+  separate(name, into = c("first_name", "last_name"), 
+           sep = " ", fill = "left") %>%
+  mutate(join_age = case_when(
+           last_name == "Oh" ~ 29,
+           TRUE ~ join_age),
+         fname = if_else(!is.na(first_name), 
+                         str_extract(first_name, "[A-Z]{1}"),
+                         ""),
+         player = case_when(
+    !is.na(first_name) ~ glue("{fname}. {last_name}"),
+    TRUE ~ last_name),
+    team_name = "Matsumoto Yamaga") %>% 
+  arrange(desc(min_perc))
+
+glimpse(yamaga_minutes)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# all teams
+
+## web-scrape
+
+### team links function
+
+```{r}
+get_team_links <- function(season) {
+  
+  url <- "https://www.transfermarkt.com/j1-league/startseite/wettbewerb/JAP1/plus/?saison_id={season}"
+  
+  session <- bow(url)
+  
+  team_links <- scrape(session) %>% 
+    html_nodes("#yw1 > table > tbody > tr > td.zentriert.no-border-rechts > a") %>% 
+    html_attr("href")
+  
+ # season <- enquo(season)
+  
+  team_links_df <- team_links %>% 
+    enframe(name = NULL) %>% 
+    separate(value, c(NA, "team_name", NA, NA, "team_num", NA, NA), sep = "/") %>% 
+    mutate(link = glue("https://www.transfermarkt.com/{team_name}/leistungsdaten/verein/{team_num}/reldata/JAP1%26{season}/plus/1"),
+           season = season)
+}
+```
+
+```{r}
+team_links_df <- get_team_links(season = 2018)
+
+glimpse(team_links_df)
+```
+
+### scrape function
+
+```{r}
+jleague_age_utility_info <- function(team_name, team_num, season) {
+  ## get age + minutes played
+  session <- bow(glue::glue("https://www.transfermarkt.com/{team_name}/leistungsdaten/verein/{team_num}/plus/0?reldata=JAP1%26{season}"))
+  
+  # grab name from photo element instead
+  result_name <- scrape(session) %>% 
+    html_nodes("#yw1 .bilderrahmen-fixed") %>% 
+    html_attr("title") 
+  
+  # grab age
+  result_age <- scrape(session) %>% 
+    html_nodes(".posrela+ .zentriert") %>% 
+    html_text()
+  
+  # grab minutes played in league
+  result_mins <- scrape(session) %>% 
+    html_nodes("td.rechts") %>% 
+    html_text()
+  
+  ## get length
+  session <- bow(glue::glue("https://www.transfermarkt.com/{team_name}/kader/verein/{team_num}/plus/1/galerie/0?saison_id={season}"))
+  
+  result_name2 <- scrape(session) %>% 
+    html_nodes("#yw1 .bilderrahmen-fixed") %>% 
+    html_attr("title") 
+  
+  result_bday <- scrape(session) %>% 
+    html_nodes(".posrela+ .zentriert") %>% 
+    html_text()
+  
+  result_joinedteam <- scrape(session) %>% 
+    html_nodes("td:nth-child(8)") %>% 
+    html_text()
+  
+  result_leaveteam <- scrape(session) %>% 
+    html_nodes("td:nth-child(10)") %>% 
+    html_text()
+  
+  # place each vector into list
+  resultados <- list(result_name, result_age, result_mins)
+  
+  col_name <- c("name", "age", "minutes")
+  
+  results_comb <- resultados %>% 
+    reduce(cbind) %>% 
+    as_tibble() %>% 
+    set_names(col_name)
+  
+  ## join + bday
+  resultados2 <- list(result_name2, result_bday, 
+                      result_joinedteam, result_leaveteam)
+  
+  col_name2 <- c("name", "bday", "join", "leave")
+  
+  results_comb2 <- resultados2 %>% 
+    reduce(cbind) %>% 
+    as_tibble() %>% 
+    set_names(col_name2)
+  
+  ## combine BOTH
+  results_comb <- results_comb %>% 
+    left_join(results_comb2) 
+  
+  # fix "strings" into proper formats, calculate % of minutes appeared
+  all_team_minutes <- results_comb %>% 
+    mutate(age = as.numeric(age),
+           minutes = minutes %>% 
+             str_replace("\\.", "") %>% 
+             str_replace("'", "") %>% 
+             as.numeric(),
+           min_perc = (minutes / 3060) %>% round(digits = 3),
+           bday = str_replace_all(bday, "\\(.*\\)", "") %>% mdy(),
+           join = join %>% mdy(),
+           join_age = interval(bday, join) / years(1),
+           age_now = interval(bday, Sys.Date()) / years(1)) %>% 
+    filter(!is.na(minutes)) %>% 
+    separate(name, into = c("first_name", "last_name"), 
+             sep = " ", fill = "left") %>%
+    mutate(
+      fname = if_else(!is.na(first_name), 
+                      str_extract(first_name, "[A-Z]{1}"),
+                      ""),
+      player = case_when(
+        !is.na(first_name) ~ glue("{fname}. {last_name}"),
+        TRUE ~ last_name),
+      team_name = team_name,
+      team_name = case_when(
+        team_name == "shimizu-s-pulse" ~ "Shimizu S-Pulse",
+        team_name == "fc-tokyo" ~ "FC Tokyo", 
+        team_name == "yokohama-f-marinos" ~ "Yokohama F. Marinos",
+        TRUE ~ str_replace_all(team_name, "-", " ") %>% stringr::str_to_title()),
+      season = season) %>% 
+    arrange(desc(min_perc)) 
+  
+  return(all_team_minutes)
+}
+```
+
+```{r}
+# ALL 18 TEAMS AT ONCE, WILL TAKE A WHILE:
+age_utility_df_ALL <- pmap(list(team_links_df$team_name, 
+                                team_links_df$team_num,
+                                team_links_df$season),
+                             .f = jleague_age_utility_info)
+
+jleague_age_utility_df <- age_utility_df_ALL %>% 
+  reduce(rbind)
+
+## save
+saveRDS(jleague_age_utility_df, file = glue("{here::here()}/data/jleague_age_utility_df_2019.RDS"))
+```
+
+# all team data
+
+```{r}
+jleague_age_utility_df <- readRDS(file = here::here("data/jleague_age_utility_df_2019.RDS"))
+```
+
+
+
+## Vissel Kobe: main plot
+
+```{r}
+jleague_age_utility_df %>% 
+  filter(team_name == "Vissel Kobe")
+```
+
+```{r}
+create_age_utility_plot <- function(df, color_1, color_2) {
+  
+  rect_df <- data.frame(
+    xmin = 25, xmax = 29,
+    ymin = 0, ymax = 1
+  )
+  max <- max(df$age, na.rm = TRUE)
+  lims <- c(16, (max(df$age, na.rm = TRUE) + 2))
+  breaks <- seq(from = 18, to = max, by = 2)
+  
+  plot <- df %>% 
+    ggplot(aes(x = age_now, y = min_perc)) +
+    geom_vline(xintercept = 25, alpha = 0.4, color = "grey20") +
+    geom_hline(yintercept = 0.5, alpha = 0.4, color = "grey20") +
+    geom_rect(data = rect_df,
+              aes(x = NULL, y = NULL,
+                  xmin = xmin, xmax = xmax,
+                  ymin = ymin, ymax = ymax),
+              fill = color_1, alpha = 0.4) +
+    geom_link(aes(x = join_age, xend = age_now,
+                  y = min_perc, yend = min_perc,
+                  alpha = stat(index)), 
+              color = color_2, size = 1.75) + 
+    geom_point(aes(x = age_now), color = color_2, size = 3.5) +
+    geom_text_repel(
+      aes(label = player),
+      nudge_y = 0.01, 
+      seed = 6) + 
+    annotate("text", x = 27, y = 1.055,
+             size = 5.5, fontface = "bold",
+             family = "Yu Mincho Demibold",
+             label = "ピーク年齢", color = "grey20") +
+    scale_y_continuous(
+      expand = c(0.01, 0),
+      limits = c(0, 1.08), 
+      breaks = seq(0, 1, by = 0.2), 
+      labels = percent_format()) +
+    scale_x_continuous(
+      limits = lims,
+      breaks = breaks) +
+    labs(
+      x = "年齢", 
+      y = tategaki_alt("出場時間 (%)"),  
+      title = glue("{df$team_name}: 年齢-出場時間"),
+      subtitle = "J-League 2019 Season (100% = 3060分)") +
+    theme_bw() +
+    theme(
+      text = element_text(family = "Yu Mincho Demibold"),
+      panel.border = element_blank(),
+      plot.title = element_text(color = color_1, size = 20, face = "bold"),
+      plot.subtitle = element_text(color = color_2, size = 18),
+      plot.caption = element_text(size = 14),
+      panel.grid.minor = element_blank(),
+      axis.title.y = element_text(angle = 0, vjust= 0.5),
+      axis.title = element_text(size = 16),
+      axis.text = element_text(size = 14),
+      axis.ticks = element_blank(),
+      legend.position = "none")
+  
+  return(plot)
+}
+
+
+```
+
+
+
+```{r fig.height=8, fig.width=12}
+df <- jleague_age_utility_df %>% 
+  filter(team_name == "Vissel Kobe")
+
+vk_plot <- df %>% 
+  create_age_utility_plot(color_1 = "#8B0000", color_2 = "#000000")
+
+vk_plot
+```
+
+
+## legend plot
+
+```{r fig.width=3, fig.height=5}
+create_age_utility_legend <- function(df, color_1, color_2){
+  
+  rect_df <- data.frame(
+    xmin = 25, xmax = 29,
+    ymin = 0, ymax = 1
+  )
+  
+  leg_df <- tibble(
+    x = 23, xend = 28,
+    y = 0.65, yend = 0.65
+  )
+  
+  legend_plot <- df %>% 
+    ggplot(aes(x = age_now, y = min_perc)) +
+    geom_rect(data = rect_df,
+              aes(x = NULL, y = NULL,
+                  xmin = xmin, xmax = xmax,
+                  ymin = ymin, ymax = ymax),
+              fill = color_1, alpha = 0.4) +
+    geom_link(data = leg_df,
+              aes(x = x, xend = xend,
+                  y = y, yend = yend,
+                  alpha = stat(index)), 
+              color = color_2, size = 1.75) + 
+    geom_point(x = 28, y = 0.65, color = color_2, size = 3.5) +
+    ## top arrow
+    geom_curve(x = 30, xend = 28.4,
+               y = 0.77, yend = 0.65,
+               curvature = -0.5, size = 1.2,
+               arrow = arrow(length = unit(0.1, "inches")),
+               lineend = "round") +
+    ## bottom arrow
+    geom_segment(x = 23, xend = 23,
+                 y = 0.48, yend = 0.63,
+                 size = 1.2,
+                 arrow = arrow(length = unit(0.1, "inches")),
+                 lineend = "round") +
+    annotate("text", x = 30, y = 0.83, family = "Yu Mincho Demibold",
+             label = "年齢", size = 4.5) +
+    annotate("text", x = 23, y = 0.4, family = "Yu Mincho Demibold",
+             label = "年齢 （入団時）", size = 4.5) +
+    scale_y_continuous(
+      limits = c(0, 1.05), 
+      breaks = seq(0, 1, by = 0.2),
+      labels = percent_format()) +
+    scale_x_continuous(
+      limits = c(18, 33),
+      breaks = seq(18, 34, by = 2)) +
+    labs(caption = glue("
+                   データ: transfermarkt.com
+                   作: @R_by_Ryo")) +
+    theme_bw() +
+    theme(
+      text = element_text(family = "Yu Mincho Demibold"),
+      panel.border = element_blank(),
+      plot.caption = element_text(size = 14),
+      axis.ticks = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_text(size = 10),
+      legend.position = "none")
+  
+  return(legend_plot)
+}
+```
+
+
+```{r fig.width=3, fig.height=5}
+vk_leg <- jleague_age_utility_df %>% 
+  filter(team_name == "Vissel Kobe") %>% 
+  create_age_utility_legend(color_1 = "#8B0000", color_2 = "#000000")
+
+vk_leg
+```
+
+
+## summary stats
+
+
+```{r fig.width=3, fig.height=5}
+create_summary_stats_plot <- function(df) {
+  summary_df <- df %>% 
+    mutate(duration = age_now - join_age) %>% 
+    summarize(median_age = median(age),
+              median_duration = round(median(duration, na.rm = TRUE), digits = 2),
+              sum_players = n())
+  
+  summary_stats <- summary_df %>%
+    ggplot(aes(x = age_now, y = min_perc)) +
+    annotate("text", x = 25, y = 0.75, 
+             size = 4,
+             label = glue::glue("選手: {summary_df$sum_players}人"),
+             family = "Yu Mincho Demibold") +
+    annotate("text", x = 25, y = 0.65, 
+             size = 4,
+             label = glue::glue("平均年齢: {summary_df$median_age}歳"),
+             family = "Yu Mincho Demibold") +
+    annotate("text", x = 25, y = 0.55, 
+             size = 4,
+             label = glue::glue("平均滞在期間: {summary_df$median_duration}年"),
+             family = "Yu Mincho Demibold") +
+    scale_y_continuous(limits = c(0.3, 0.9)) +
+    theme_void()
+  
+  return(summary_stats)
+}
+```
+
+選手：２５人
+平均年齢
+平均滞在期間/日数
+
+```{r fig.width=3, fig.height=5}
+vk_sum <- jleague_age_utility_df %>% 
+  filter(team_name == "Vissel Kobe") %>% 
+  create_summary_stats_plot()
+
+vk_sum
+```
+
+
+## combine
+
+```{r fig.width=15, fig.height=8}
+layout <- "
+AAAA##
+AAAAC#
+AAAA##
+AAAAB#
+"
+
+combined_plot <- vk_plot + vk_leg + vk_sum + 
+  plot_layout(design = layout)
+
+combined_plot
+```
+
+## save
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/visselkobe_combplot.png",
+       height = 8, width = 15)
+```
+
+
+
+```{r}
+plot_logo <- add_logo(plot_path = "../J-League 2020/output/visselkobe_combplot.png",
+                      logo_path = "https://upload.wikimedia.org/wikipedia/en/8/87/VisselKobe.png",
+                      logo_position = "top right",
+                      logo_scale = 23)
+
+plot_logo
+```
+
+```{r}
+image_write(image = plot_logo, "../J-League 2020/output/visselkobe_logo_combplot.png")
+```
+
+
+
+# Shimizu S-Pulse
+
+## plot
+
+```{r fig.height=8, fig.width=12}
+df <- jleague_age_utility_df %>% 
+  filter(team_name == "Shimizu S-Pulse")
+
+ssp_plot <- df %>% 
+  create_age_utility_plot(color_1 = "#F29900", color_2 = "#0569AE")
+
+ssp_plot
+```
+
+## legend plot
+
+```{r fig.width=3, fig.height=5}
+ssp_leg <- jleague_age_utility_df %>% 
+  filter(team_name == "Shimizu S-Pulse") %>% 
+  create_age_utility_legend(color_1 = "#F29900", color_2 = "#0569AE")
+
+ssp_leg
+```
+
+## summary stats
+
+```{r fig.width=3, fig.height=5}
+ssp_sum <- jleague_age_utility_df %>% 
+  filter(team_name == "Shimizu S-Pulse") %>% 
+  create_summary_stats_plot()
+
+ssp_sum
+```
+
+## combine
+
+```{r fig.width=15, fig.height=8}
+layout <- "
+AAAA##
+AAAAC#
+AAAA##
+AAAAB#
+"
+
+combined_plot <- ssp_plot + ssp_leg + ssp_sum + 
+  plot_layout(design = layout)
+
+combined_plot
+```
+
+## save
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/shimizuspulse_combplot.png",
+       height = 8, width = 15)
+```
+
+
+
+```{r}
+plot_logo <- add_logo(plot_path = "../J-League 2020/output/shimizuspulse_combplot.png",
+                      logo_path = "https://upload.wikimedia.org/wikipedia/en/e/ef/Shimizu_S-Pulse_emblem_since_2020.png",
+                      logo_position = "top right",
+                      logo_scale = 23)
+
+plot_logo
+```
+
+```{r}
+image_write(image = plot_logo, "../J-League 2020/output/shimizuspulse_logo_combplot.png")
+```
+
+
+
+
+# Shonan Bellmare
+
+## plot
+
+```{r fig.height=8, fig.width=12}
+df <- jleague_age_utility_df %>% 
+  filter(team_name == "Shonan Bellmare")
+
+sb_plot <- df %>% 
+  create_age_utility_plot(color_1 = "#67B356", color_2 = "#103C95")
+
+sb_plot
+```
+
+## legend plot
+
+```{r fig.width=3, fig.height=5}
+sb_leg <- jleague_age_utility_df %>% 
+  filter(team_name == "Shonan Bellmare") %>% 
+  create_age_utility_legend(color_1 = "#67B356", color_2 = "#103C95")
+
+sb_leg
+```
+
+## summary stats
+
+```{r fig.width=3, fig.height=5}
+sb_sum <- jleague_age_utility_df %>% 
+  filter(team_name == "Shonan Bellmare") %>% 
+  create_summary_stats_plot()
+
+sb_sum
+```
+
+## combine
+
+```{r fig.width=15, fig.height=8}
+layout <- "
+AAAA##
+AAAAC#
+AAAA##
+AAAAB#
+"
+
+combined_plot <- sb_plot + sb_leg + sb_sum + 
+  plot_layout(design = layout)
+
+combined_plot
+```
+
+## save
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/shonanbellmare_combplot.png",
+       height = 8, width = 15)
+```
+
+
+
+```{r}
+plot_logo <- add_logo(plot_path = "../J-League 2020/output/shonanbellmare_combplot.png",
+                      logo_path = "https://upload.wikimedia.org/wikipedia/en/2/2c/ShonanBellmare.png",
+                      logo_position = "top right",
+                      logo_scale = 23)
+
+plot_logo
+```
+
+```{r}
+image_write(image = plot_logo, "../J-League 2020/output/shonanbellmare_logo_combplot.png")
+```
+
+
+# Yokohama F. Marinos
+
+
+## plot
+
+```{r fig.height=8, fig.width=12}
+yfm_plot <- jleague_age_utility_df %>% 
+  filter(team_name == "Yokohama F. Marinos") %>% 
+  create_age_utility_plot(color_1 = "#003f99", color_2 = "#F40041")
+
+yfm_plot
+```
+
+## legend plot
+
+```{r fig.width=3, fig.height=5}
+yfm_leg <- jleague_age_utility_df %>% 
+  filter(team_name == "Yokohama F. Marinos") %>% 
+  create_age_utility_legend(color_1 = "#003f99", color_2 = "#F40041")
+
+yfm_leg
+```
+
+## summary_plot
+
+```{r fig.width=3, fig.height=5}
+yfm_sum <- jleague_age_utility_df %>% 
+  filter(team_name == "Yokohama F. Marinos") %>% 
+  create_summary_stats_plot()
+
+yfm_sum
+```
+
+## combine
+
+```{r fig.width=15, fig.height=8}
+layout <- "
+AAAA##
+AAAAC#
+AAAA##
+AAAAB#
+"
+
+combined_plot <- yfm_plot + yfm_leg + yfm_sum + 
+  plot_layout(design = layout)
+
+combined_plot
+```
+
+## save
+
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/yokohamamarinos_combplot.png",
+       height = 8, width = 15)
+```
+
+
+
+```{r}
+plot_logo <- add_logo(plot_path = "../J-League 2020/output/yokohamamarinos_combplot.png",
+                      logo_path = "https://upload.wikimedia.org/wikipedia/en/6/65/Yokohama_F_Marinos_logo.svg",
+                      logo_position = "top right",
+                      logo_scale = 15)
+
+plot_logo
+```
+
+```{r}
+image_write(image = plot_logo, "../J-League 2020/output/yokohamamarinos_logo_combplot.png")
+```
+
+
+# function
+
+
+```{r fig.width=15, fig.height=8}
+img <- here::here("img/KawasakiFrontale.png")
+
+ggdraw() +
+  draw_plot(combined_plot) +
+  draw_image(img, x = 0.01, y = 0.01, width = 0.1, height = 0.2)
+
+
+img <- png::readPNG(here::here("img/KawasakiFrontale.png"))
+rasterimg <- grid::rasterGrob(img, interpolate = TRUE)
+
+img_df <- data.frame(x = seq(1, 10, 1),
+                     y = seq(1, 10, 1))
+
+logo_plot <- ggplot(img_df, aes(x = x, y = y)) +
+  geom_point(color = "white") +
+  annotation_custom(rasterimg, xmin = 2, xmax = 8, 
+                    ymin = 2, ymax = 8) +
+  scale_x_continuous(limits = c(0, 10)) +
+  scale_y_continuous(limits = c(0, 10)) +
+  theme_void()
+
+logo_plot
+```
+
+
+
+
+```{r fig.width=15, fig.height=8}
+age_utility_plotter <- function(df, team_name, color_1, color_2) {
+  
+  team_name <- enquo(team_name)
+
+  df <- df %>% 
+  filter(team_name == !!team_name)
+  
+  age_utility_plot <- df %>% 
+    create_age_utility_plot(color_1 = color_1, color_2 = color_2)
+  
+  plot_leg <- df %>% 
+    create_age_utility_legend(color_1 = color_1, color_2 = color_2)
+  
+  plot_sum <- df %>% 
+  create_summary_stats_plot()
+  
+  layout <- "
+AAAA##
+AAAAC#
+AAAA##
+AAAAB#
+"
+  
+  combined_plot <- age_utility_plot + plot_leg + plot_sum + 
+    plot_layout(design = layout)
+  
+  return(combined_plot)
+}
+```
+
+
+```{r fig.width=15, fig.height=8}
+age_utility_plotter(df = jleague_age_utility_df, 
+                    team_name = "Urawa Red Diamonds",
+                    color_1 = "black", color_2 = "red")
+```
+
+
+
+
+```{r fig.width=15, fig.height=8}
+age_utility_plotter(df = jleague_age_utility_df, 
+                    team_name = "Sagan Tosu",
+                    color_1 = "pink", color_2 = "lightblue")
+```
+
+
+```{r fig.width=15, fig.height=8}
+age_utility_plotter(df = jleague_age_utility_df, 
+                    team_name = "Oita Trinita",
+                    color_1 = "blue", color_2 = "yellow")
+```
+
+
+```{r fig.width=15, fig.height=8}
+age_utility_plotter(df = jleague_age_utility_df, 
+                    team_name = "Gamba Osaka",
+                    color_1 = "blue", color_2 = "black")
+```
+
+
+
+
+
+```{r fig.width=15, fig.height=8}
+age_utility_plotter(df = jleague_age_utility_df, 
+                    team_name = "Cerezo Osaka",
+                    color_1 = "violet", color_2 = "black")
+```
+
+
+```{r fig.width=15, fig.height=8}
+age_utility_plotter(df = jleague_age_utility_df, 
+                    team_name = "Nagoya Grampus",
+                    color_1 = "red", color_2 = "orange")
+```
+
+# Kawasaki Frontale
+
+```{r fig.width=15, fig.height=8}
+combined_plot <- age_utility_plotter(df = jleague_age_utility_df, 
+                    team_name = "Kawasaki Frontale",
+                    color_1 = "black", color_2 = "#1EB8FF",
+                    j_name = "川崎フロンターレ",
+                    img_path = here::here("img/KawasakiFrontale.png"))
+
+combined_plot
+```
+
+Last season most of #Frontale's minutes were taken up by an aging core + rotating parts by a large # of players in their "peak" ages (a lot to cover for RB). Offseason, they've bought Issaka & Kamiya to provide more youthful backup. #川崎フロンターレ #JLeague
+
+Getting Yamane from Shonan Bellmare will also help with solving the uncertainty around RB from last season. While the likes to Mitoma, Hatate, & Miyadai will hope to gain some minutes as cover for the veterans Damiao & Kobayashi.
+
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/kawasakifrontale_combplot.png",
+       height = 8, width = 15)
+```
+
+
+
+# FC Tokyo
+
+```{r fig.width=15, fig.height=8}
+combined_plot <- age_utility_plotter(df = tokyo_minutes, 
+                    team_name = "FC Tokyo",
+                    color_1 = "#271672", color_2 = "#DD2220",
+                    j_name = "FC 東京",
+                    img_path = here::here("img/FCTokyo.png"))
+
+combined_plot
+```
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/FCTokyo_combplot.png",
+       height = 8, width = 15)
+```
+
+
+ #FCTokyo's title challenge came from a strong core of veteran players with squad roles mainly given to youth + Omori, Jang, Oh, & Mita. With a formation change & the transfer of Adailton & Leandro #FC東京 will have hopes for a first #JLeague title. #rstats #ggplot2 #SpoAna
+
+
+
+# Kashima Antlers
+
+```{r fig.width=15, fig.height=8}
+combined_plot <- age_utility_plotter(df = jleague_age_utility_df, 
+                    team_name = "Kashima Antlers",
+                    color_1 = "darkred", color_2 = "black",
+                    j_name = "鹿島アントラーズ",
+                    img_path = here::here("img/Kashima_Antlers.png"))
+
+combined_plot
+```
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/KashimaAntlers_combplot.png",
+       height = 8, width = 15)
+```
+
+# Vissel Kobe
+
+```{r fig.width=15, fig.height=8}
+combined_plot <- age_utility_plotter(df = jleague_age_utility_df, 
+                    team_name = "Vissel Kobe",
+                    color_1 = "#bf0000", color_2 = "#000000",
+                    j_name = "ヴィッセル神戸",
+                    img_path = here::here("img/VisselKobe.png"))
+
+combined_plot
+```
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/VisselKobe_combplot.png",
+       height = 8, width = 15)
+```
+
+
+# Oita Trinita
+
+```{r fig.width=15, fig.height=8}
+combined_plot <- age_utility_plotter(df = jleague_age_utility_df, 
+                    team_name = "Oita Trinita",
+                    j_name = "大分トリニータ",
+                    color_1 = "blue", color_2 = "#CCCC00",
+                    img_path = here::here("img/OitaTrinita.png"))
+
+combined_plot
+```
+
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/OitaTrinita_combplot.png",
+       height = 8, width = 15)
+```
+
+# Gamba Osaka
+
+```{r fig.width=15, fig.height=8}
+combined_plot <- age_utility_plotter(df = jleague_age_utility_df, 
+                    team_name = "Gamba Osaka",
+                    j_name = "ガンバ大阪",
+                    color_1 = "#10308E", color_2 = "black",
+                    img_path = here::here("img/GambaOsaka.png"))
+
+combined_plot
+```
+
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/GambaOsaka_combplot.png",
+       height = 8, width = 15)
+```
+
+# Cerezo Osaka
+
+```{r fig.width=15, fig.height=8}
+combined_plot <- age_utility_plotter(df = jleague_age_utility_df, 
+                    team_name = "Cerezo Osaka",
+                    j_name = "セレッソ大阪",
+                    color_1 = "#F1258E", color_2 = "#1C2581",
+                    img_path = here::here("img/CerezoOsaka.png"))
+
+combined_plot
+```
+
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/CerezoOsaka_combplot.png",
+       height = 8, width = 15)
+```
+
+
+# Nagoya Gramps 8
+
+```{r fig.width=15, fig.height=8}
+combined_plot <- age_utility_plotter(df = jleague_age_utility_df, 
+                    team_name = "Nagoya Grampus",
+                    j_name = "名古屋グランパス",
+                    color_1 = "red", color_2 = "orange",
+                    img_path = here::here("img/NagoyaGrampus8.png"))
+
+combined_plot
+```
+
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/NagoyaGrampus_combplot.png",
+       height = 8, width = 15)
+```
+
+
+
+# Shimizu S-Pulse
+
+
+```{r fig.width=15, fig.height=8}
+combined_plot <- age_utility_plotter(df = jleague_age_utility_df, 
+                    team_name = "Shimizu S-Pulse",
+                    j_name = "清水エスパルス",
+                    color_1 = "#F29900", color_2 = "#0569AE",
+                    img_path = here::here("img/ShimizuSPulse.png"))
+
+combined_plot
+```
+
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/ShimizuSPulse_combplot.png",
+       height = 8, width = 15)
+```
+
+
+
+# Yokohama F. Marinos
+
+
+```{r fig.width=15, fig.height=8}
+combined_plot <- age_utility_plotter(df = jleague_age_utility_df, 
+                    team_name = "Yokohama F. Marinos",
+                    j_name = "横浜F・マリノス",
+                    color_1 = "#003f99", color_2 = "#F40041",
+                    img_path = here::here("img/YokohamaFMarinos.png"))
+
+combined_plot
+```
+
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/YokohamaFMarinos_combplot.png",
+       height = 8, width = 15)
+```
+
+# Shonan Bellmare
+
+
+```{r fig.width=15, fig.height=8}
+combined_plot <- age_utility_plotter(df = jleague_age_utility_df, 
+                    team_name = "Shonan Bellmare",
+                    j_name = "湘南ベルマーレ",
+                    color_1 = "#67B356", color_2 = "#103C95",
+                    img_path = here::here("img/ShonanBellmare.png"))
+
+combined_plot
+```
+
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/ShonanBellmare_combplot.png",
+       height = 8, width = 15)
+```
+
+# Urawa Red Diamonds
+
+
+```{r fig.width=15, fig.height=8}
+combined_plot <- age_utility_plotter(df = jleague_age_utility_df, 
+                    team_name = "Urawa Red Diamonds",
+                    j_name = "浦和レッドダイヤモンズ",
+                    color_1 = "black", color_2 = "red",
+                    img_path = here::here("img/UrawaReds.png"))
+
+combined_plot
+```
+
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/UrawaReds_combplot.png",
+       height = 8, width = 15)
+```
+
+
+# Sanfrecce Hiroshima
+
+```{r fig.width=15, fig.height=8}
+combined_plot <- age_utility_plotter(df = jleague_age_utility_df, 
+                    team_name = "Sanfrecce Hiroshima",
+                    j_name = "サンフレッチェ広島",
+                    color_1 = "#533097", color_2 = "#AF9271",
+                    img_path = here::here("img/SanfrecceHiroshima.png"))
+
+combined_plot
+```
+
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/SanfrecceHiroshima_combplot.png",
+       height = 8, width = 15)
+```
+
+
+
+
+# Hokkaido Consadole
+
+```{r fig.width=15, fig.height=8}
+combined_plot <- age_utility_plotter(df = jleague_age_utility_df, 
+                    team_name = "Consadole Sapporo",
+                    j_name = "北海道コンサドーレ札幌",
+                    color_1 = "#0C506C", color_2 = "red",
+                    img_path = here::here("img/ConsadoleSapporo.png"))
+
+combined_plot
+```
+
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/ConsadoleSapporo_combplot.png",
+       height = 8, width = 15)
+```
+
+
+# Vegalta Sendai
+
+```{r fig.width=15, fig.height=8}
+combined_plot <- age_utility_plotter(df = jleague_age_utility_df, 
+                    team_name = "Vegalta Sendai",
+                    j_name = "ベガルタ仙台",
+                    color_1 = "#FDBE02", color_2 = "#DD030A",
+                    img_path = here::here("img/VegaltaSendai.png"))
+
+combined_plot
+```
+
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/VegaltaSendai_combplot.png",
+       height = 8, width = 15)
+```
+
+
+# Matsumoto Yamaga
+
+```{r fig.width=15, fig.height=8}
+combined_plot <- age_utility_plotter(df = yamaga_minutes, 
+                    team_name = "Matsumoto Yamaga",
+                    j_name = "松本山雅フットボールクラブ",
+                    color_1 = "#005220", color_2 = "#016830",
+                    img_path = here::here("img/MatsumotoYamaga.png"))
+
+combined_plot
+```
+
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/MatsumotoYamaga_combplot.png",
+       height = 8, width = 15)
+```
+
+# Jubilo Iwata
+
+```{r fig.width=15, fig.height=8}
+combined_plot <- age_utility_plotter(df = jubilo_minutes, 
+                    team_name = "Jubilo Iwata",
+                    j_name = "ジュビロ磐田",
+                    color_1 = "#5693c1", color_2 = "#000000",
+                    img_path = here::here("img/JubiloIwata.png"))
+
+combined_plot
+```
+
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/JubiloIwata_combplot.png",
+       height = 8, width = 15)
+```
+
+# Sagan Tosu
+
+```{r fig.width=15, fig.height=8}
+combined_plot <- age_utility_plotter(df = jleague_age_utility_df, 
+                    team_name = "Sagan Tosu",
+                    j_name = "サガン鳥栖",
+                    color_1 = "#ec518f", color_2 = "#009acb",
+                    img_path = here::here("img/SaganTosu.png"))
+
+combined_plot
+```
+
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/SaganTosu_combplot.png",
+       height = 8, width = 15)
+```
+
+
+# Kashiwa Reysol
+
+```{r fig.width=15, fig.height=8}
+combined_plot <- age_utility_plotter(df = reysol_minutes, 
+                    team_name = "Kashiwa Reysol",
+                    j_name = "柏レイソル",
+                    color_1 = "#CCCC00", color_2 = "#000000",
+                    img_path = here::here("img/KashiwaReysol.png"))
+
+combined_plot
+```
+
+
+```{r}
+ggsave(plot = combined_plot, "../J-League 2020/output/KashiwaReysol_combplot.png",
+       height = 8, width = 15)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,7 @@
+Who's Been the Best Shot-Stopper &/or Busiest Keeper 📊 in #SerieA 🇮🇹?
+Using @FBRef/@StatsBomb's new post-shot xG & GSAA data!
+
+- Szczesny (#Juventus), Gabriel (#Lecce), Strakosha (#Lazio), etc. 👍
+- Gollini (#Atalanta), Skorupski (#Bologna), etc. 👎
+
+#rstats #ggplot2

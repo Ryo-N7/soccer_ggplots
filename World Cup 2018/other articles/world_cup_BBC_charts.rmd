@@ -1,0 +1,135 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "June 11, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+library(tidyverse)
+library(scales)
+library(scales)
+library(ggthemes)
+library(ggflags)
+library(ggimage)
+
+
+wc_top_scorers <- tribble(
+  ~player, ~goals, ~country, ~code,
+  
+  "Klose", 16, "Germany", "DE",
+  "Ronaldo", 15, "Brazil", "BR",
+  "G. Mueller", 14, "Germany", "DE",
+  "Fontaine", 13, "France", "FR", 
+  "Pele", 12, "Brazil", "BR",
+  "Kocsis", 11, "Hungary", "HU",
+  "Klinsmann", 11, "Germany", "DE",
+  "Rahn", 10, "Germany", "DE",
+  "Cubillas", 10, "Peru", "PE",
+  "Lineker", 10, "England", "GB",
+  "Batistuta", 10, "Argentina", "AR",
+  "T. Mueller", 10, "Germany", "DE"
+  
+)
+
+glimpse(wc_top_scorers)
+
+
+ggplot(wc_top_scorers, 
+       aes(reorder(player, goals), goals)) +
+  geom_col(alpha = 0.9, fill = "white") +
+  geom_flag(y = -2, aes(image = code)) +
+  geom_point(shape = 21, color = "black", fill = "white", stroke = 3, size = 4) +
+  coord_flip() +
+  expand_limits(y = -2) +
+  #geom_text() +
+  theme_minimal()
+
+```
+
+- find flags >>> in ggflag or geom_flag NO england, only UK...
+- find ball pics
+- annotate for '78-94
+- flag on axis :: Done
+- geom_text number of goals
+- custom legend
+- how to make ball for EACH point?? >>> multiple one-row waffle charts???
+
+
+
+```{r}
+library(ggimage) # 2 letter ISO codes
+
+f <- system.file("extdata/medals.txt", package="ggimage")
+medals <- read.table(f, header=TRUE)
+p <- ggplot(medals, aes(Country, count)) + geom_col(aes(fill = medal), width = .8)
+
+p + geom_flag(y = -2, aes(image = code)) +
+    coord_flip() + 
+    expand_limits(y = -2)  +
+    scale_fill_manual(values = c("Gold" = "gold", "Bronze" = "#cd7f32", "Silver" = "#C0C0C0"))
+
+```
+
+
+
+
+
+
+
+```{r}
+wc_top <- tribble(
+  ~player, ~goals, ~country, ~code,
+  
+  "Klose", 1, "Germany", "DE",
+  "Klose", 2, "Germany", "DE",
+  "Klose", 3, "Germany", "DE",
+  "Klose", 4, "Germany", "DE",
+  "Klose", 5, "Germany", "DE",
+  "Klose", 6, "Germany", "DE",
+  "Klose", 7, "Germany", "DE",
+  "Klose", 8, "Germany", "DE",
+  "Fontaine", 13, "France", "FR", 
+  "Pele", 12, "Brazil", "BR",
+  "Kocsis", 11, "Hungary", "HU",
+  "Klinsmann", 11, "Germany", "DE",
+  "Rahn", 10, "Germany", "DE",
+  "Cubillas", 10, "Peru", "PE",
+  "Lineker", 10, "England", "GB",
+  "Batistuta", 10, "Argentina", "AR",
+  "T. Mueller", 10, "Germany", "DE"
+  
+)
+
+ggplot(wc_top, 
+       aes(reorder(player, goals), goals)) +
+  geom_col(alpha = 0.9, fill = "white") +
+  geom_point(shape = 21, color = "black", fill = "white", stroke = 1.5, size = 3.5) +
+  coord_flip() +
+  expand_limits(y = -2) +
+  #geom_text() +
+  theme_minimal()
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

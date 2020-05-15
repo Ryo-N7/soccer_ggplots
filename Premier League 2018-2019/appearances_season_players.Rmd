@@ -1,0 +1,785 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "10/10/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Appearances over Season: Split between Managers
+
+## packages
+
+```{r, message=FALSE, warning=FALSE}
+pacman::p_load(tidyverse, polite, scales, ggimage, ggforce,
+               rvest, glue, extrafont, ggrepel, magick, ggtext)
+loadfonts()
+```
+
+# 2018-2019
+
+
+## squad info
+
+- Squad details 
+
+```{r}
+url <- "https://www.transfermarkt.com/liverpool-fc/leistungsdaten/verein/31/reldata/GB1%262018/plus/1"
+
+session <- bow(url)
+
+squad_table_raw <- scrape(session) %>% 
+  html_nodes(".hauptlink > div > span > a") %>% 
+  html_attr("href")
+
+squad_table_clean <- squad_table_raw %>% 
+  enframe() %>% 
+  select(-name) %>% 
+  distinct() %>% 
+  separate(value, into = c("1", "2", '3', '4', '5'), sep = "\\/") %>% 
+  select(player_name = 2, id_num = 5)
+
+## add links
+squad_table_df <- squad_table_clean %>% 
+  mutate(link = glue::glue("https://www.transfermarkt.com/{player_name}/leistungsdatendetails/spieler/{id_num}/saison/2018/verein/31/liga/0/wettbewerb/GB1/pos/0/trainer_id/0/plus/1")) %>% 
+  ## remove Karius, Bogdan, Kelleher, Grabara, Hoever, CR56, 
+  ## Grujic, C. Jones, I. C-D, H. Wilson, Solanke, Ings, 
+  ## 
+  slice(-3, -4, -5, -6, -15, -16, -22, -25, -26, -32, -33, -34,
+        -36, -37, -38)
+
+glimpse(squad_table_df)
+```
+
+Know # of players >> Check when webscrape
+
+```{r}
+saveRDS(squad_table_df, file = here::here("data/squad_LFC_18_19_df.RDS"))
+squad_table_df <- readRDS(file = here::here("data/squad_LFC_18_19_df.RDS"))
+```
+
+## base dates
+
+- use someone like Migs who played/in squad of every single game:
+
+```{r}
+base_url <- "https://www.transfermarkt.com/alisson/leistungsdatendetails/spieler/50219/saison/2018/verein/31/liga/0/wettbewerb/GB1/pos/0/trainer_id/0/plus/1"
+
+session <- bow(base_url)
+
+base_raw <- scrape(session) %>% 
+  html_nodes("div.responsive-table:nth-child(3) > table:nth-child(1)") %>% 
+  html_table(fill = TRUE) %>% 
+  .[[1]] %>% 
+  janitor::clean_names() %>% 
+  slice(-n())
+
+base_dates <- base_raw %>% 
+  select(date, home = home_team_2, away = away_team_2,
+         result, goal = x, assist = x_2,
+         sub_in = x_7, sub_out = x_8, minutes = x_9) %>% 
+  ## make sure minutes == 0 for BASE
+  ## add empty FALSE injury col
+  mutate(date = lubridate::mdy(date),
+         minutes = 0,
+         injury = FALSE) %>% 
+  ## set sub_in, sub_out = 0
+  mutate(sub_in = "",
+         sub_out = 0) %>% 
+  ## set goals/assists = 0
+  mutate(goal = 0,
+         assist = 0) %>% 
+  ## separate result
+  separate(result, into = c("home_goal", "away_goal"), 
+           sep = ":", convert = TRUE) %>% 
+  ## home - away and rank
+  mutate(home_rank = home %>% str_extract("[0-9]+") %>% as.numeric,
+         away_rank = away %>% str_extract("[0-9]+") %>% as.numeric,
+         home = home %>% str_remove_all("\\(.*\\)"),
+         away = away %>% str_remove_all("\\(.*\\)"))
+```
+
+Check that row == 38
+
+
+```{r}
+saveRDS(base_dates, file = here::here("data/base_LFC_18_19_dates_df.RDS"))
+base_dates <- readRDS(file = here::here("data/base_LFC_18_19_dates_df.RDS"))
+```
+
+
+## get_appearances() function
+
+```{r}
+get_appearances <- function(link) {
+  
+  session <- bow(link)
+  
+  appearances_raw <- scrape(session) %>% 
+    html_nodes("div.responsive-table:nth-child(3) > table:nth-child(1)") %>% 
+    html_table(fill = TRUE) %>% 
+    .[[1]] %>% 
+    #magrittr::extract2(1) %>% 
+    janitor::clean_names() %>% 
+    slice(-n())
+  
+  appearances_clean <- appearances_raw %>% 
+  select(date, home = home_team_2, away = away_team_2,
+         result, goal = x, assist = x_2,
+         sub_in = x_7, sub_out = x_8, minutes = x_9) %>% 
+  mutate(date = lubridate::mdy(date),
+         minutes =  
+           if_else(str_detect(minutes, "'"), 
+                   str_replace_all(minutes, "'", ""), minutes),
+         minutes = if_else(str_detect(minutes, "^[0-9]+$"),
+                           minutes, "0") %>% as.numeric()) %>% 
+  ## injury + suspension
+  mutate(sub_in =  
+           if_else(str_detect(sub_in, "'"), 
+                   str_replace_all(sub_in, "'", ""), sub_in),
+         sub_in = case_when(
+    str_detect(sub_in, "^[0-9]+$") == TRUE ~ "",
+    TRUE ~ sub_in)) %>% 
+  ## handle cases of suspension too, otherwise == FALSE
+  mutate(injury = case_when(
+    sub_in %in% c("on the bench", "Not in squad", "With 2nd team",
+                  "special leave", "doping ban", "") ~ FALSE,
+    TRUE ~ TRUE)) %>% 
+  ## fix sub_out
+  mutate(sub_out =  
+           if_else(str_detect(sub_out, "'"), 
+                   str_replace_all(sub_out, "'", ""), sub_out),
+         sub_out = if_else(str_detect(sub_out, "^[0-9]+$"),
+                           sub_out, "0") %>% as.numeric()) %>% 
+  ## fix goals/assists
+  mutate(goal = if_else(str_detect(goal, "^[0-9]+$"),
+                           goal, "0") %>% as.numeric(),
+         assist = if_else(str_detect(assist, "^[0-9]+$"),
+                           assist, "0") %>% as.numeric()) %>% 
+  ## separate result
+  separate(result, into = c("home_goal", "away_goal"), 
+           sep = ":", convert = TRUE) %>% 
+  ## home - away and rank
+  mutate(home_rank = home %>% str_extract("[0-9]+") %>% as.numeric,
+         away_rank = away %>% str_extract("[0-9]+") %>% as.numeric,
+         home = home %>% str_remove_all("\\(.*\\)"),
+         away = away %>% str_remove_all("\\(.*\\)"))
+  
+  ## deal with no match rows:
+  ## basically using base df, anti_join on dates and 
+  ## insert info for rows where missing
+  add_df <- base_dates %>% 
+    anti_join(appearances_clean, by = c("date"))
+  
+  ## combine missing data with existing
+  appearances_clean <- appearances_clean %>% 
+    full_join(add_df) %>% 
+    arrange(date)
+}
+```
+
+## iterate over
+
+```{r}
+appearances_df_raw <- map2(.x = squad_table_df$link,
+                           .y = squad_table_df$player_name,
+                           ~ get_appearances(link = .x) %>% 
+                             mutate(name = .y))
+```
+
+Check # of squad members == element of list
+
+```{r}
+length(appearances_df_raw) == 24
+```
+
+
+```{r}
+saveRDS(appearances_df_raw, 
+        file = glue("{here::here()}/data/appearances_df_raw_LFC_18_19.RDS"))
+appearances_df_raw <- readRDS(
+  file = glue("{here::here()}/data/appearances_df_raw_LFC_18_19.RDS"))
+```
+
+
+# clean
+
+```{r}
+appearances_df_LFC_18_19 <- appearances_df_raw %>% 
+  reduce(bind_rows) %>% 
+  group_by(name) %>% 
+  mutate(match_num = row_number()) %>% 
+  mutate(end = seq(from = 90, to = 3420, by = 90),
+         start = lag(end, default = 0),
+         dur = if_else(minutes == 90, start, end - minutes)) %>% 
+  ## for sub-outs
+  mutate(end = case_when(
+    sub_out != 0 ~ start + sub_out,
+    TRUE ~ end),
+    dur = case_when(
+      sub_out != 0 ~ start,
+      TRUE ~ dur)) %>% 
+  ## change times for injury == TRUE
+  mutate(dur = case_when(
+    injury == TRUE ~ start,
+    TRUE ~ dur)) %>% 
+  ungroup() %>% 
+  mutate(name = str_replace_all(name, "-", " ") %>% str_to_title(),
+         position = case_when(row_number() %in% 1:76 ~ "GK",
+                              row_number() %in% 77:380 ~ "DF",
+                              row_number() %in% 381:646 ~ "MF",
+                              row_number() %in% 647:874 ~ "ST"),
+         position = as_factor(position) %>% 
+           fct_relevel("GK", "DF", "MF", "ST"),
+         name = as_factor(name)) %>% 
+  arrange(position, name) %>% 
+  mutate(id = row_number(),
+         name = fct_reorder(name, id))
+```
+
+
+
+```{r}
+## save
+saveRDS(appearances_df_LFC_18_19, 
+        file = glue("{here::here()}/data/appearances_df_LFC_18_19.RDS"))
+appearances_df_LFC_18_19 <- readRDS(
+  file = glue("{here::here()}/data/appearances_df_LFC_18_19.RDS"))
+```
+
+
+# plot
+
+## plot aux
+
+```{r}
+divide_lines <- tibble(yint = seq(0.5, 23.5, by = 1))
+
+verticolo <- tibble(verts_start = seq(0, 3420, by = 90),
+                    verts_end = seq(0, 3420, by = 90),
+                    y_low = 0.5,
+                    y_high = 23.5)
+```
+
+## all player
+
+```{r, fig.height=9, fig.width=12, message=FALSE}
+appearances_df_LFC_18_19 %>% 
+  ggplot(aes(x = dur, 
+             y = name, yend = name)) + 
+  ## fit
+    geom_segment(data = appearances_df_LFC_18_19 %>% 
+                 filter(injury == FALSE),
+               aes(xend = end,
+                   group = match_num),
+               size = 3.5, color = "darkgreen") +
+  ## injury + suspension
+  geom_segment(data = appearances_df_LFC_18_19 %>% 
+                 filter(injury == TRUE),
+               aes(xend = end, 
+                   group = match_num),
+               size = 3.5, color = "black") +
+  geom_segment(data = verticolo, 
+               aes(x = verts_start, xend = verts_end, 
+                   y = y_low, yend = y_high)) +
+  ## Dividers
+  geom_hline(data = divide_lines, aes(yintercept = yint),
+             size = 0.5) +
+  scale_x_continuous(breaks = seq(45, 3420, 90),
+                     labels = seq(1, 38, 1),
+                     expand = c(0, 0)) +
+  expand_limits(y = c(0.1, 26)) +
+  ## Kloppo
+  annotate(geom = "segment", 
+           x = 1710, xend = 1710,
+           y = 24, yend = 24.5,
+           color = "black", size = 1) +
+  annotate(geom = "label", size = 5,
+           label = "Jürgen Klopp (W: 30 D: 7 L: 1)",
+           x = 1710, y = 25, family = "Roboto Condensed") +
+  annotate(geom = "segment", 
+           x = 7, xend = 3415,
+           y = 24, yend = 24,
+           color = "black", size = 1) +
+  annotate(geom = "segment", 
+           x = 7, xend = 7,
+           y = 23.7, yend = 24.3,
+           color = "black", size = 1) +
+  annotate(geom = "segment", 
+           x = 3415, xend = 3415,
+           y = 23.7, yend = 24.3,
+           color = "black", size = 1) +
+  labs(title = "Player Minutes | <b style='color:#D00027'>Liverpool FC</b> | Season 2018-2019",
+       subtitle = glue("
+                       Players Ordered by Position (ST, MF, DF, GK)
+                       Black = Injury or Suspension"),
+       x = "Minutes Played per Game Week", y = "",
+       caption = glue::glue("
+                            Data: transfermarkt.com
+                            By: @R_by_Ryo")) +
+  theme_minimal() +
+  theme(text = element_text(family = "Roboto Condensed"),
+        axis.title = element_text(size = 14),
+        axis.text.x = element_text(color = "black", size = 11),
+        axis.text.y = element_text(color = "black", size = 10),
+        panel.grid = element_blank(),
+        plot.title = element_markdown(size = 20),
+        plot.subtitle = element_text(size = 14),
+        plot.caption = element_text(size = 12))
+```
+
+```{r}
+ggsave(filename = here::here("Premier League 2018-2019/output/player_minutes_LFC_18_19.png"),
+       height = 9, width = 12)
+```
+
+## add logo
+
+```{r}
+# add logo with Magick using Thomas Mock's custom function
+# check out the explanation in his blog post: https://themockup.netlify.com/posts/2019-01-09-add-a-logo-to-your-plot/
+add_logo <- function(plot_path, logo_path, logo_position, logo_scale = 10){
+
+    # Requires magick R Package https://github.com/ropensci/magick
+
+    # Useful error message for logo position
+    if (!logo_position %in% c("top right", "top left", "bottom right", "bottom left")) {
+        stop("Error Message: Uh oh! Logo Position not recognized\n  Try: logo_positon = 'top left', 'top right', 'bottom left', or 'bottom right'")
+    }
+
+    # read in raw images
+    plot <- magick::image_read(plot_path)
+    logo_raw <- magick::image_read(logo_path)
+
+    # get dimensions of plot for scaling
+    plot_height <- magick::image_info(plot)$height
+    plot_width <- magick::image_info(plot)$width
+
+    # default scale to 1/10th width of plot
+    # Can change with logo_scale
+    logo <- magick::image_scale(logo_raw, as.character(plot_width/logo_scale))
+
+    # Get width of logo
+    logo_width <- magick::image_info(logo)$width
+    logo_height <- magick::image_info(logo)$height
+
+    # Set position of logo
+    # Position starts at 0,0 at top left
+    # Using 0.01 for 1% - aesthetic padding
+
+    if (logo_position == "top right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "top left") {
+        x_pos = 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "bottom right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    } else if (logo_position == "bottom left") {
+        x_pos = 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    }
+
+    # Compose the actual overlay
+    magick::image_composite(plot, logo, offset = paste0("+", x_pos, "+", y_pos))
+
+}
+
+# add_logo and save
+plot_logo <- add_logo(plot_path = here::here("Premier League 2018-2019/output/player_minutes_LFC_18_19.png"),
+                      logo_path = "https://upload.wikimedia.org/wikipedia/en/thumb/0/0c/Liverpool_FC.svg/800px-Liverpool_FC.svg.png",
+                      logo_position = "top right",
+                      logo_scale = 18)
+
+image_write(image = plot_logo, 
+            path = here::here("Premier League 2018-2019/output/player_minutes_LFC_18_19_logo.png"))
+```
+
+
+# -----------------------------------------------------
+
+# 2019-2020 
+
+
+## squad info
+
+- Squad details 
+
+```{r}
+url <- "https://www.transfermarkt.com/liverpool-fc/leistungsdaten/verein/31/reldata/GB1%262019/plus/1"
+
+session <- bow(url)
+
+squad_table_raw <- scrape(session) %>% 
+  html_nodes(".hauptlink > div > span > a") %>% 
+  html_attr("href")
+
+squad_table_clean <- squad_table_raw %>% 
+  enframe() %>% 
+  select(-name) %>% 
+  distinct() %>% 
+  separate(value, into = c("1", "2", '3', '4', '5'), sep = "\\/") %>% 
+  select(player_name = 2, id_num = 5)
+
+## add links
+squad_table_df <- squad_table_clean %>% 
+  mutate(link = glue::glue("https://www.transfermarkt.com/{player_name}/leistungsdatendetails/spieler/{id_num}/saison/2019/verein/31/liga/0/wettbewerb/GB1/pos/0/trainer_id/0/plus/1")) %>% 
+  ## remove Kelleher, Lonergan, Hoever, CR56, 
+  ## Grujic, C. Jones, I. C-D, H. Wilson, Solanke, Ings, 
+  ## 
+  slice(-3, -4, -12)
+
+glimpse(squad_table_df)
+```
+
+Know # of players >> Check when webscrape
+
+```{r}
+saveRDS(squad_table_df, file = here::here("data/squad_LFC_19_20_df.RDS"))
+squad_table_df <- readRDS(file = here::here("data/squad_LFC_19_20_df.RDS"))
+```
+
+## base dates
+
+- use someone like Migs who played/in squad of every single game:
+
+```{r}
+base_url <- "https://www.transfermarkt.com/virgil-van-dijk/leistungsdatendetails/spieler/139208/saison/2019/verein/31/liga/0/wettbewerb/GB1/pos/0/trainer_id/0/plus/1"
+
+session <- bow(base_url)
+
+base_raw <- scrape(session) %>% 
+  html_nodes("div.responsive-table:nth-child(3) > table:nth-child(1)") %>% 
+  html_table(fill = TRUE) %>% 
+  .[[1]] %>% 
+  janitor::clean_names() %>% 
+  slice(-n())
+
+base_dates <- base_raw %>% 
+  select(date, home = home_team_2, away = away_team_2,
+         result, goal = x, assist = x_2,
+         sub_in = x_7, sub_out = x_8, minutes = x_9) %>% 
+  ## make sure minutes == 0 for BASE
+  ## add empty FALSE injury col
+  mutate(date = lubridate::mdy(date),
+         minutes = 0,
+         injury = FALSE) %>% 
+  ## set sub_in, sub_out = 0
+  mutate(sub_in = "",
+         sub_out = 0) %>% 
+  ## set goals/assists = 0
+  mutate(goal = 0,
+         assist = 0) %>% 
+  ## separate result
+  separate(result, into = c("home_goal", "away_goal"), 
+           sep = ":", convert = TRUE) %>% 
+  ## home - away and rank
+  mutate(home_rank = home %>% str_extract("[0-9]+") %>% as.numeric,
+         away_rank = away %>% str_extract("[0-9]+") %>% as.numeric,
+         home = home %>% str_remove_all("\\(.*\\)"),
+         away = away %>% str_remove_all("\\(.*\\)"))
+```
+
+Check that row == 8
+
+```{r}
+nrow(base_dates) == 8
+```
+
+
+
+```{r}
+saveRDS(base_dates, file = here::here("data/base_LFC_19_20_dates_df.RDS"))
+base_dates <- readRDS(file = here::here("data/base_LFC_19_20_dates_df.RDS"))
+```
+
+
+## get_appearances() function
+
+```{r}
+get_appearances <- function(link) {
+  
+  session <- bow(link)
+  
+  appearances_raw <- scrape(session) %>% 
+    html_nodes("div.responsive-table:nth-child(3) > table:nth-child(1)") %>% 
+    html_table(fill = TRUE) %>% 
+    .[[1]] %>% 
+    #magrittr::extract2(1) %>% 
+    janitor::clean_names() %>% 
+    slice(-n())
+  
+  appearances_clean <- appearances_raw %>% 
+  select(date, home = home_team_2, away = away_team_2,
+         result, goal = x, assist = x_2,
+         sub_in = x_7, sub_out = x_8, minutes = x_9) %>% 
+  mutate(date = lubridate::mdy(date),
+         minutes =  
+           if_else(str_detect(minutes, "'"), 
+                   str_replace_all(minutes, "'", ""), minutes),
+         minutes = if_else(str_detect(minutes, "^[0-9]+$"),
+                           minutes, "0") %>% as.numeric()) %>% 
+  ## injury + suspension
+  mutate(sub_in =  
+           if_else(str_detect(sub_in, "'"), 
+                   str_replace_all(sub_in, "'", ""), sub_in),
+         sub_in = case_when(
+    str_detect(sub_in, "^[0-9]+$") == TRUE ~ "",
+    TRUE ~ sub_in)) %>% 
+  ## handle cases of suspension too, otherwise == FALSE
+  mutate(injury = case_when(
+    sub_in %in% c("on the bench", "Not in squad", "With 2nd team",
+                  "special leave", "doping ban", "") ~ FALSE,
+    TRUE ~ TRUE)) %>% 
+  ## fix sub_out
+  mutate(sub_out =  
+           if_else(str_detect(sub_out, "'"), 
+                   str_replace_all(sub_out, "'", ""), sub_out),
+         sub_out = if_else(str_detect(sub_out, "^[0-9]+$"),
+                           sub_out, "0") %>% as.numeric()) %>% 
+  ## fix goals/assists
+  mutate(goal = if_else(str_detect(goal, "^[0-9]+$"),
+                           goal, "0") %>% as.numeric(),
+         assist = if_else(str_detect(assist, "^[0-9]+$"),
+                           assist, "0") %>% as.numeric()) %>% 
+  ## separate result
+  separate(result, into = c("home_goal", "away_goal"), 
+           sep = ":", convert = TRUE) %>% 
+  ## home - away and rank
+  mutate(home_rank = home %>% str_extract("[0-9]+") %>% as.numeric,
+         away_rank = away %>% str_extract("[0-9]+") %>% as.numeric,
+         home = home %>% str_remove_all("\\(.*\\)"),
+         away = away %>% str_remove_all("\\(.*\\)"))
+  
+  ## deal with no match rows:
+  ## basically using base df, anti_join on dates and 
+  ## insert info for rows where missing
+  add_df <- base_dates %>% 
+    anti_join(appearances_clean, by = c("date"))
+  
+  ## combine missing data with existing
+  appearances_clean <- appearances_clean %>% 
+    full_join(add_df) %>% 
+    arrange(date)
+}
+```
+
+## iterate over
+
+```{r}
+appearances_df_raw <- map2(.x = squad_table_df$link,
+                           .y = squad_table_df$player_name,
+                           ~ get_appearances(link = .x) %>% 
+                             mutate(name = .y))
+```
+
+Check # of squad members == element of list
+
+```{r}
+length(appearances_df_raw) == 23
+```
+
+
+```{r}
+saveRDS(appearances_df_raw, 
+        file = glue("{here::here()}/data/appearances_df_raw_LFC_19_20.RDS"))
+appearances_df_raw <- readRDS(
+  file = glue("{here::here()}/data/appearances_df_raw_LFC_19_20.RDS"))
+```
+
+
+# clean
+
+```{r}
+appearances_df_LFC_19_20 <- appearances_df_raw %>% 
+  reduce(bind_rows) %>% 
+  group_by(name) %>% 
+  mutate(match_num = row_number()) %>% 
+  mutate(end = seq(from = 90, to = 720, by = 90),
+         start = lag(end, default = 0),
+         dur = if_else(minutes == 90, start, end - minutes)) %>% 
+  ## for sub-outs
+  mutate(end = case_when(
+    sub_out != 0 ~ start + sub_out,
+    TRUE ~ end),
+    dur = case_when(
+      sub_out != 0 ~ start,
+      TRUE ~ dur)) %>% 
+  ## change times for injury == TRUE
+  mutate(dur = case_when(
+    injury == TRUE ~ start,
+    TRUE ~ dur)) %>% 
+  ungroup() %>% 
+  mutate(name = str_replace_all(name, "-", " ") %>% str_to_title(),
+         position = case_when(row_number() %in% 1:16 ~ "GK",
+                              row_number() %in% 17:72 ~ "DF",
+                              row_number() %in% 73:128 ~ "MF",
+                              row_number() %in% 129:184 ~ "ST"),
+         position = as_factor(position) %>% 
+           fct_relevel("GK", "DF", "MF", "ST"),
+         name = as_factor(name)) %>% 
+  arrange(position, name) %>% 
+  mutate(id = row_number(),
+         name = fct_reorder(name, id))
+```
+
+
+
+```{r}
+## save
+saveRDS(appearances_df_LFC_19_20, 
+        file = glue("{here::here()}/data/appearances_df_LFC_19_20.RDS"))
+appearances_df_LFC_19_20 <- readRDS(
+  file = glue("{here::here()}/data/appearances_df_LFC_19_20.RDS"))
+```
+
+
+# plot
+
+## plot aux
+
+```{r}
+divide_lines <- tibble(yint = seq(0.5, 23.5, by = 1))
+
+verticolo <- tibble(verts_start = seq(0, 720, by = 90),
+                    verts_end = seq(0, 720, by = 90),
+                    y_low = 0.5,
+                    y_high = 23.5)
+```
+
+## all player
+
+```{r, fig.height=9, fig.width=12, message=FALSE}
+appearances_df_LFC_19_20 %>% 
+  ggplot(aes(x = dur, 
+             y = name, yend = name)) + 
+  geom_segment(data = appearances_df_LFC_19_20,
+               aes(xend = end,
+                   group = match_num, color = injury),
+               size = 3.5) +
+  scale_color_manual(values = c("darkgreen", "red"),
+                     guide = FALSE) +
+  geom_segment(data = verticolo, 
+               aes(x = verts_start, xend = verts_end, 
+                   y = y_low, yend = y_high)) +
+  ## Dividers
+  geom_hline(data = divide_lines, aes(yintercept = yint),
+             size = 0.5) +
+  scale_x_continuous(breaks = seq(45, 720, 90),
+                     labels = seq(1, 8, 1),
+                     expand = c(0, 0)) +
+  expand_limits(y = c(0.1, 26)) +
+  ## Kloppo
+  annotate(geom = "segment", 
+           x = 360, xend = 360,
+           y = 24, yend = 24.8,
+           color = "black", size = 1) +
+  annotate(geom = "label", size = 5,
+           label = "Jürgen Klopp (W: 8 D: 0 L: 0)",
+           x = 360, y = 25, family = "Roboto Condensed") +
+  annotate(geom = "segment", 
+           x = 1, xend = 719,
+           y = 24, yend = 24,
+           color = "black", size = 1) +
+  annotate(geom = "segment", 
+           x = 1, xend = 1,
+           y = 23.7, yend = 24.3,
+           color = "black", size = 1) +
+  annotate(geom = "segment", 
+           x = 719, xend = 719,
+           y = 23.7, yend = 24.3,
+           color = "black", size = 1) +
+  labs(title = "Player Minutes | <b style='color:#D00027'>Liverpool FC</b> | Season 2019-2020",
+       subtitle = glue("
+                       Players Ordered by Position (ST, MF, DF, GK)
+                       Black = Injury or Suspension"),
+       x = "Minutes Played per Game Week", y = "",
+       caption = glue::glue("
+                            Data: transfermarkt.com
+                            By: @R_by_Ryo")) +
+  theme_minimal() +
+  theme(text = element_text(family = "Roboto Condensed"),
+        axis.title = element_text(size = 14),
+        axis.text.x = element_text(color = "black", size = 11),
+        axis.text.y = element_text(color = "black", size = 10),
+        panel.grid = element_blank(),
+        plot.title = element_markdown(size = 20),
+        plot.subtitle = element_text(size = 14),
+        plot.caption = element_text(size = 12))
+```
+
+```{r}
+ggsave(filename = here::here("Premier League 2018-2019/output/player_minutes_LFC_19_20.png"),
+       height = 9, width = 12)
+```
+
+## add logo
+
+```{r}
+# add logo with Magick using Thomas Mock's custom function
+# check out the explanation in his blog post: https://themockup.netlify.com/posts/2019-01-09-add-a-logo-to-your-plot/
+add_logo <- function(plot_path, logo_path, logo_position, logo_scale = 10){
+
+    # Requires magick R Package https://github.com/ropensci/magick
+
+    # Useful error message for logo position
+    if (!logo_position %in% c("top right", "top left", "bottom right", "bottom left")) {
+        stop("Error Message: Uh oh! Logo Position not recognized\n  Try: logo_positon = 'top left', 'top right', 'bottom left', or 'bottom right'")
+    }
+
+    # read in raw images
+    plot <- magick::image_read(plot_path)
+    logo_raw <- magick::image_read(logo_path)
+
+    # get dimensions of plot for scaling
+    plot_height <- magick::image_info(plot)$height
+    plot_width <- magick::image_info(plot)$width
+
+    # default scale to 1/10th width of plot
+    # Can change with logo_scale
+    logo <- magick::image_scale(logo_raw, as.character(plot_width/logo_scale))
+
+    # Get width of logo
+    logo_width <- magick::image_info(logo)$width
+    logo_height <- magick::image_info(logo)$height
+
+    # Set position of logo
+    # Position starts at 0,0 at top left
+    # Using 0.01 for 1% - aesthetic padding
+
+    if (logo_position == "top right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "top left") {
+        x_pos = 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "bottom right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    } else if (logo_position == "bottom left") {
+        x_pos = 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    }
+
+    # Compose the actual overlay
+    magick::image_composite(plot, logo, offset = paste0("+", x_pos, "+", y_pos))
+
+}
+
+# add_logo and save
+plot_logo <- add_logo(plot_path = here::here("Premier League 2018-2019/output/player_minutes_LFC_19_20.png"),
+                      logo_path = "https://upload.wikimedia.org/wikipedia/en/thumb/0/0c/Liverpool_FC.svg/800px-Liverpool_FC.svg.png",
+                      logo_position = "top right",
+                      logo_scale = 18)
+
+image_write(image = plot_logo, 
+            path = here::here("Premier League 2018-2019/output/player_minutes_LFC_19_20_logo.png"))
+```
+
+
+
+

@@ -1,0 +1,349 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "2/29/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# packages
+
+```{r, message=FALSE, warning=FALSE}
+pacman::p_load(tidyverse, polite, scales, ggimage, rvest, 
+               glue, extrafont, showtext, ggrepel, magick, 
+               ggforce, ggtext, lubridate, 
+               cowplot, patchwork, rlang)
+loadfonts(quiet = TRUE)
+```
+
+
+
+# get data
+
+
+```{r}
+
+## team links function
+get_team_links <- function(season) {
+  
+  url <- "https://www.transfermarkt.com/premier-league/startseite/wettbewerb/ES1/plus/?saison_id={season}"
+  
+  session <- bow(url)
+  
+  team_links <- scrape(session) %>% 
+    html_nodes("#yw1 > table > tbody > tr > td.zentriert.no-border-rechts > a") %>% 
+    html_attr("href")
+  
+  # season <- enquo(season)
+  
+  team_links_df <- team_links %>% 
+    enframe(name = NULL) %>% 
+    separate(value, c(NA, "team_name", NA, NA, "team_num", NA, NA), sep = "/") %>% 
+    mutate(link = glue("https://www.transfermarkt.com/{team_name}/leistungsdaten/verein/{team_num}/reldata/%26{season}/plus/1"),
+           season = season)
+}
+
+
+
+team_links_df <- get_team_links(season = 2019)
+
+glimpse(team_links_df)
+
+## scrape function
+laliga_age_utility_info <- function(team_name, team_num, season, total_minutes) {
+  ## get age + minutes played
+  session <- bow(glue::glue("https://www.transfermarkt.com/{team_name}/leistungsdaten/verein/{team_num}/plus/1?reldata=ES1%26{season}/"))
+  
+  # grab name from photo element instead
+  result_name <- scrape(session) %>% 
+    html_nodes("#yw1 .bilderrahmen-fixed") %>% 
+    html_attr("title") 
+  
+  # grab age
+  result_age <- scrape(session) %>% 
+    html_nodes(".posrela+ .zentriert") %>% 
+    html_text()
+  
+  # grab minutes played in league
+  result_mins <- scrape(session) %>% 
+    html_nodes("td.rechts") %>% 
+    html_text()
+  
+  ## get length
+  session <- bow(glue::glue("https://www.transfermarkt.com/{team_name}/kader/verein/{team_num}/saison_id/{season}/plus/1"))
+  
+  result_name2 <- scrape(session) %>% 
+    html_nodes("#yw1 .bilderrahmen-fixed") %>% 
+    html_attr("title") 
+  
+  result_bday <- scrape(session) %>% 
+    html_nodes(".posrela+ .zentriert") %>% 
+    html_text()
+  
+  result_joinedteam <- scrape(session) %>% 
+    html_nodes("td:nth-child(7)") %>% 
+    html_text()
+  
+  result_leaveteam <- scrape(session) %>% 
+    html_nodes("td:nth-child(9)") %>% 
+    html_text()
+  
+  # place each vector into list
+  resultados <- list(result_name, result_age, result_mins)
+  
+  col_name <- c("name", "age", "minutes")
+  
+  results_comb <- resultados %>% 
+    reduce(cbind) %>% 
+    as_tibble() %>% 
+    set_names(col_name)
+  
+  ## join + bday
+  resultados2 <- list(result_name2, result_bday, 
+                      result_joinedteam, result_leaveteam)
+  
+  col_name2 <- c("name", "bday", "join", "leave")
+  
+  results_comb2 <- resultados2 %>% 
+    reduce(cbind) %>% 
+    as_tibble() %>% 
+    set_names(col_name2)
+  
+  ## combine BOTH
+  results_comb <- results_comb %>% 
+    left_join(results_comb2) 
+  
+  # fix "strings" into proper formats, calculate % of minutes appeared
+  all_team_minutes <- results_comb %>% 
+    mutate(age = as.numeric(age),
+           minutes = minutes %>% 
+             str_replace("\\.", "") %>% 
+             str_replace("'", "") %>% 
+             as.numeric(),
+           min_perc = (minutes / total_minutes) %>% round(digits = 3),
+           bday = str_replace_all(bday, "\\(.*\\)", "") %>% mdy(),
+           join = join %>% mdy(),
+           join_age = interval(bday, join) / years(1),
+           age_now = interval(bday, Sys.Date()) / years(1)) %>% 
+    filter(!is.na(minutes)) %>% 
+    separate(name, into = c("first_name", "last_name"), 
+             sep = " ", fill = "left") %>%
+    mutate(
+      fname = if_else(!is.na(first_name), 
+                      str_extract(first_name, "[A-Z]{1}"),
+                      ""),
+      player = case_when(
+        !is.na(first_name) ~ glue("{fname}. {last_name}"),
+        TRUE ~ last_name),
+      team_name = team_name,
+      team_name = case_when(
+        team_name == "real-sociedad-san-sebastian" ~ "Real Sociedad",
+        team_name == "fc-valencia" ~ "Valencia CF", 
+        team_name == "real-betis-sevilla" ~ "Real Betis", 
+        team_name == "ca-osasuna" ~ "CA Osasuna",
+        team_name == "yokohama-f-marinos" ~ "Yokohama F. Marinos",
+        TRUE ~ str_replace_all(team_name, "-", " ") %>% stringr::str_to_title()),
+      season = season) %>% 
+    arrange(desc(min_perc)) 
+  
+  return(all_team_minutes)
+}
+
+
+# ALL TEAMS AT ONCE, WILL TAKE A WHILE:
+age_utility_df_ALL <- pmap(list(team_links_df$team_name, 
+                                team_links_df$team_num,
+                                team_links_df$season,
+                                2250),
+                           .f = laliga_age_utility_info)
+
+laliga_age_utility_df <- age_utility_df_ALL %>% 
+  reduce(rbind)
+
+## save
+saveRDS(laliga_age_utility_df, 
+        file = glue("{here::here()}/data/laliga_age_utility_df_MD25_1920.RDS"))
+
+
+## all team data
+
+
+laliga_age_utility_df <- readRDS(file = here::here(glue::glue("data/laliga_age_utility_df_MD25_1920.RDS")))
+
+```
+
+# plot
+
+
+## Osasuna
+
+```{r fig.width=15, fig.height=8}
+osasuna_df <- laliga_age_utility_df %>% 
+  filter(team_name == "CA Osasuna") %>% 
+  mutate(player = case_when(player == "D. de" ~ "D. De Gea", 
+                            TRUE ~ as.character(player)),
+         join_age = case_when(player == "Brandon" ~ 23.3,
+                              TRUE ~ join_age),
+         age_now = case_when(player == "Brandon" ~ 25,
+                             TRUE ~ age_now))
+
+osasunacombined_plot <- age_utility_plotter(df = osasuna_df, 
+                    team_name = "CA Osasuna",
+                    j_name = "CA Osasuna",
+                    color_1 = "#0a346f", color_2 = "#d91a21", #firebrick1 #009782
+                    img_path = here::here("img/CAOsasuna.png"))
+
+osasunacombined_plot
+```
+
+
+```{r}
+ggsave(plot = osasunacombined_plot, "../La Liga 2019-2020/output/Osasuna_age_utility_22820.png",
+       height = 8, width = 15)
+```
+
+
+
+
+
+## Real Madrid
+
+```{r fig.width=15, fig.height=8}
+realmadrid_df <- laliga_age_utility_df %>% 
+  filter(team_name == "Real Madrid") %>% 
+  mutate(player = case_when(player == "NA. Militão" ~ "E. Militão", 
+                            TRUE ~ as.character(player)),
+         join_age = case_when(player == "Brandon" ~ 23.3,
+                              TRUE ~ join_age),
+         age_now = case_when(player == "Brandon" ~ 25,
+                             TRUE ~ age_now))
+
+realmadridcombined_plot <- age_utility_plotter(df = realmadrid_df, 
+                    team_name = "Real Madrid",
+                    j_name = "Real Madrid",
+                    color_1 = "#00529f", color_2 = "#febe10", #firebrick1 #009782
+                    img_path = here::here("img/RealMadrid.png"))
+
+realmadridcombined_plot
+```
+
+
+```{r}
+ggsave(plot = realmadridcombined_plot, "../La Liga 2019-2020/output/realmadrid_age_utility_310.png",
+       height = 8, width = 15)
+```
+
+
+
+
+
+## Atletico Madrid
+
+```{r fig.width=15, fig.height=8}
+Atleticomadrid_df <- laliga_age_utility_df %>% 
+  filter(team_name == "Atletico Madrid") %>% 
+  mutate(player = case_when(player == "NA. Morata" ~ "A. Morata",
+                            player == "NA. Correa" ~ "A. Correa", 
+                            TRUE ~ as.character(player)),
+         join_age = case_when(player == "Brandon" ~ 23.3,
+                              TRUE ~ join_age),
+         age_now = case_when(player == "Brandon" ~ 25,
+                             TRUE ~ age_now))
+
+Atleticomadridcombined_plot <- age_utility_plotter(df = Atleticomadrid_df, 
+                    team_name = "Atletico Madrid",
+                    j_name = "Atletico Madrid",
+                    color_1 = "#262f61", color_2 = "#ce3524", #firebrick1 #009782
+                    img_path = here::here("img/AtleticoMadrid.png"))
+
+Atleticomadridcombined_plot
+```
+
+
+```{r}
+ggsave(plot = Atleticomadridcombined_plot, "../La Liga 2019-2020/output/Atleticomadrid_age_utility_310.png",
+       height = 8, width = 15)
+```
+
+
+
+
+
+
+
+
+## Barcelona
+
+```{r fig.width=15, fig.height=8}
+barcelona_df <- laliga_age_utility_df %>% 
+  filter(team_name == "Fc Barcelona") %>% 
+  mutate(player = case_when(player == "F. de" ~ "F. de Jong",
+                            player == "M. ter" ~ "M. ter Stegen", 
+                            TRUE ~ as.character(player)),
+         join_age = case_when(first_name == "Carles" & minutes == 473 ~ 21,
+                              first_name == "Carles" & minutes == 170 ~ 18.9,
+                              TRUE ~ join_age),
+         age_now = case_when(first_name == "Carles" & minutes == 473 ~ 21,
+                             first_name == "Carles" & minutes == 170 ~ 22.2,
+                             TRUE ~ age_now),
+         team_name = "Barcelona")
+
+barcacombined_plot <- age_utility_plotter(df = barcelona_df, 
+                    team_name = "Barcelona",
+                    j_name = "Barcelona",
+                    color_1 = "#004d98", color_2 = "#a50044", #firebrick1 #009782
+                    img_path = here::here("img/Barcelona.png"))
+
+barcacombined_plot
+```
+
+
+```{r}
+ggsave(plot = barcacombined_plot, "../La Liga 2019-2020/output/Barcelona_age_utility_310.png",
+       height = 8, width = 15)
+```
+
+
+
+
+
+
+## Valencia
+
+```{r fig.width=15, fig.height=8}
+valencia_df <- laliga_age_utility_df %>% 
+  filter(team_name == "Valencia CF") %>% 
+  mutate(player = case_when(player == "NA. Morata" ~ "A. Morata",
+                            player == "NA. Correa" ~ "A. Correa", 
+                            TRUE ~ as.character(player)),
+         join_age = case_when(player == "Brandon" ~ 23.3,
+                              TRUE ~ join_age),
+         age_now = case_when(player == "Brandon" ~ 25,
+                             TRUE ~ age_now))
+
+valenciacombined_plot <- age_utility_plotter(df = valencia_df, 
+                    team_name = "Valencia CF",
+                    j_name = "Valencia CF",
+                    color_1 = "#ffdf1c", color_2 = "#ee3524", #firebrick1 #009782
+                    img_path = here::here("img/Valencia.png"))
+
+valenciacombined_plot
+```
+
+
+```{r}
+ggsave(plot = valenciacombined_plot, "../La Liga 2019-2020/output/Valencia_age_utility_310.png",
+       height = 8, width = 15)
+```
+
+
+
+
+
+
+
+
+

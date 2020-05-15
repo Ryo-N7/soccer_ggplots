@@ -1,0 +1,34 @@
+,,,,,,Goals,Goals,Goals,Goals,Goals,Expected,Expected,Expected,Expected,Launched,Launched,Launched,Passes,Passes,Passes,Passes,Goal Kicks,Goal Kicks,Goal Kicks,Crosses,Crosses,Crosses,Sweeper,Sweeper,Sweeper,
+Rk,Player,Nation,Pos,Squad,90s,GA,PKA,FK,CK,OG,PSxG,PSxG/SoT,PSxG+/-,/90,Cmp,Att,Cmp%,Att,Thr,Launch%,AvgLen,Att,Launch%,AvgLen,Att,Stp,Stp%,#OPA,#OPA/90,AvgDist,Matches
+1,Enrico Alfonso\Enrico-Alfonso,it ITA,GK,Brescia,3.0,4,0,0,0,0,2.1,0.19,-1.9,-0.63,11,31,35.5,50,8,44.0,36.5,24,37.5,32.8,20,1,5.0,4,1.33,16.3,Matches
+2,Emil Audero\Emil-Audero,it ITA,GK,Sampdoria,20.0,33,2,0,7,1,29.1,0.31,-2.9,-0.14,104,329,31.6,418,73,52.2,42.5,163,68.1,48.6,170,15,8.8,13,0.65,14.1,Matches
+3,Etrit Berisha\Etrit-Berisha,al ALB,GK,SPAL,20.0,27,4,1,1,1,31.4,0.29,+2.4,+0.12,160,352,45.5,516,109,45.3,37.5,181,65.2,48.8,155,14,9.0,10,0.50,13.0,Matches
+4,Gianluigi Buffon\Gianluigi-Buffon,it ITA,GK,Juventus,7.0,7,0,0,2,0,5.4,0.25,-1.6,-0.22,18,29,62.1,123,26,16.3,25.6,42,21.4,24.1,41,0,0.0,5,0.71,16.2,Matches
+5,Andrea Consigli\Andrea-Consigli,it ITA,GK,Sassuolo,15.0,29,4,1,4,2,24.2,0.34,-2.8,-0.19,55,154,35.7,373,76,34.6,32.7,94,26.6,27.7,98,12,12.2,8,0.53,13.9,Matches
+6,Antonio Donnarumma\Antonio-Donnarumma,it ITA,GK,Milan,0.0,0,0,,,,,,,,,,,,,,,,,,,,,,,,Matches
+7,Gianluigi Donnarumma\Gianluigi-Donnarumma,it ITA,GK,Milan,19.0,25,2,0,3,1,24.4,0.31,+0.4,+0.02,111,257,43.2,449,96,39.9,35.3,143,54.5,41.0,111,11,9.9,19,1.00,16.7,Matches
+8,Bartłomiej Drągowski\Bartlomiej-Dragowski,pl POL,GK,Fiorentina,20.0,29,1,2,4,0,24.0,0.29,-5.0,-0.25,91,261,34.9,442,113,43.0,37.9,144,49.3,42.3,132,11,8.3,10,0.50,12.7,Matches
+9,Gabriel\Gabriel,br BRA,GK,Lecce,20.0,39,6,0,6,0,44.3,0.37,+5.3,+0.26,101,239,42.3,393,120,39.9,36.7,213,38.5,34.2,190,12,6.3,6,0.30,12.9,Matches
+10,Pierluigi Gollini\Pierluigi-Gollini,it ITA,GK,Atalanta,17.0,25,3,0,2,2,20.9,0.37,-2.1,-0.13,91,213,42.7,400,89,33.5,35.8,118,66.9,52.4,92,8,8.7,16,0.94,15.1,Matches
+11,Samir Handanović\Samir-Handanovic,si SVN,GK,Inter,20.0,17,1,0,1,1,18.3,0.26,+2.3,+0.11,86,172,50.0,445,129,25.6,29.9,157,36.9,34.0,163,11,6.7,3,0.15,11.3,Matches
+12,Jesse Joronen\Jesse-Joronen,fi FIN,GK,Brescia,17.0,34,5,0,7,2,33.3,0.36,+1.3,+0.07,82,247,33.2,337,94,51.0,42.2,163,46.0,41.0,148,10,6.8,4,0.24,13.0,Matches
+13,Pau López\Pau-Lopez,es ESP,GK,Roma,19.0,22,6,1,0,0,25.0,0.35,+3.0,+0.16,119,254,46.9,533,114,36.4,34.8,136,44.1,38.7,106,4,3.8,14,0.74,14.7,Matches
+14,Federico Marchetti\Federico-Marchetti,it ITA,GK,Genoa,0.0,0,0,,,,,,,,,,,,,,,,,,,,,,,,Matches
+15,Alex Meret\Alex-Meret,it ITA,GK,Napoli,13.0,20,2,0,2,1,17.1,0.34,-1.9,-0.15,33,88,37.5,256,58,26.6,29.0,94,21.3,26.8,64,5,7.8,3,0.23,11.7,Matches
+16,Antonio Mirante\Antonio-Mirante,it ITA,GK,Roma,1.0,0,0,0,0,0,0.7,0.35,+0.7,+0.70,9,17,52.9,39,8,41.0,36.1,8,12.5,25.0,12,0,0.0,0,0.00,11.3,Matches
+17,Juan Musso\Juan-Musso,ar ARG,GK,Udinese,20.0,31,6,1,5,0,31.4,0.36,+0.4,+0.02,126,294,42.9,416,74,47.8,38.1,202,47.0,38.7,138,18,13.0,9,0.45,13.5,Matches
+18,Robin Olsen\Robin-Olsen,se SWE,GK,Cagliari,14.9,20,4,0,1,2,20.7,0.30,+2.7,+0.18,92,239,38.5,285,51,55.1,45.3,145,56.6,47.5,135,9,6.7,3,0.20,10.8,Matches
+19,David Ospina\David-Ospina,co COL,GK,Napoli,7.0,8,1,0,1,0,7.1,0.29,-0.9,-0.12,26,45,57.8,146,24,22.6,28.8,39,30.8,26.6,37,4,10.8,5,0.71,13.3,Matches
+20,Gianluca Pegolo\Gianluca-Pegolo,it ITA,GK,Sassuolo,3.0,2,0,0,0,1,4.7,0.24,+3.7,+1.23,8,20,40.0,68,16,22.1,26.4,23,21.7,21.4,18,1,5.6,0,0.00,12.0,Matches
+21,Mattia Perin\Mattia-Perin,it ITA,GK,Genoa,3.0,6,1,0,0,1,5.7,0.43,+0.7,+0.23,24,64,37.5,75,12,68.0,48.7,28,46.4,38.9,17,0,0.0,0,0.00,10.3,Matches
+22,Ionuț Radu\Ionut-Radu,ro ROU,GK,Genoa,17.0,35,6,2,4,1,29.1,0.33,-4.9,-0.29,89,206,43.2,506,85,35.0,34.2,153,19.0,27.9,120,6,5.0,4,0.24,11.5,Matches
+23,Rafael\Rafael,br BRA,GK,Cagliari,5.0,11,2,0,0,0,8.0,0.53,-3.0,-0.60,35,79,44.3,106,16,58.5,41.8,47,36.2,35.8,53,5,9.4,2,0.40,12.0,Matches
+24,Pepe Reina\Pepe-Reina,es ESP,GK,Milan,1.0,1,0,1,0,0,1.5,0.31,+0.5,+0.55,11,21,52.4,30,6,53.3,39.7,7,71.4,50.7,10,2,20.0,2,2.00,19.6,Matches
+25,Luigi Sepe\Luigi-Sepe,it ITA,GK,Parma,20.0,27,1,0,5,0,28.1,0.25,+1.1,+0.06,177,357,49.6,417,63,61.2,45.7,202,50.5,37.4,167,8,4.8,4,0.20,13.6,Matches
+26,Marco Silvestri\Marco-Silvestri,it ITA,GK,Hellas Verona,19.0,22,5,0,4,0,22.4,0.29,+0.4,+0.02,104,413,25.2,386,32,66.6,48.5,179,87.2,59.9,130,7,5.4,6,0.32,12.5,Matches
+27,Salvatore Sirigu\Salvatore-Sirigu,it ITA,GK,Torino,20.0,28,3,0,3,1,32.2,0.32,+5.2,+0.26,175,369,47.4,404,56,54.7,42.2,186,79.6,51.0,138,10,7.2,11,0.55,14.4,Matches
+28,Łukasz Skorupski\Lukasz-Skorupski,pl POL,GK,Bologna,20.0,32,2,2,2,0,24.7,0.29,-7.3,-0.37,122,293,41.6,470,105,45.3,38.5,155,51.6,39.4,136,18,13.2,8,0.40,12.9,Matches
+29,Marco Sportiello\Marco-Sportiello,it ITA,GK,Atalanta,3.0,3,0,0,0,0,2.8,0.21,-0.2,-0.08,8,22,36.4,70,14,21.4,28.1,14,50.0,41.9,14,2,14.3,4,1.33,20.5,Matches
+30,Thomas Strakosha\Thomas-Strakosha,al ALB,GK,Lazio,19.0,18,1,1,3,1,21.1,0.30,+4.1,+0.22,108,221,48.9,467,78,40.0,34.5,126,27.0,29.1,93,7,7.5,8,0.42,13.6,Matches
+31,Wojciech Szczęsny\Wojciech-Szczesny,pl POL,GK,Juventus,13.0,12,3,0,2,0,18.0,0.31,+6.0,+0.46,54,92,58.7,244,82,28.7,33.6,90,24.4,28.2,103,7,6.8,10,0.77,14.0,Matches
+32,Stefano Turati\Stefano-Turati,it ITA,GK,Sassuolo,2.0,4,1,0,0,0,4.1,0.38,+0.1,+0.06,4,12,33.3,37,9,24.3,26.9,14,21.4,25.6,17,2,11.8,2,1.00,18.2,Matches

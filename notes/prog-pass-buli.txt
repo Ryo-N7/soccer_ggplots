@@ -1,0 +1,31 @@
+Progressive Pass 📊 for the #Bundesliga: 
+
+- Julian Brandt (#BVB): elite ⚽️ progressor, providing the incisive ball between the build-up & final pass 
+- Kimmich & Alaba playing more centrally has them dominate ball progression metrics for #FCBayern
+
+#rstats #ggplot2 #ggforce
+
+
+#ggplot2 code: https://gist.github.com/Ryo-N7/756a73410c97753284a39260928ea813
+
+Inspired by @jcperez_'s plots: 
+
+https://twitter.com/jcperez_/status/1215226713157840898
+
+
+
+
+
+[OC] Progressive Passers of the Bundesliga: Dortmund's Julian Brandt & Bayern's Passing Maestros lead the league.
+
+- Julian Brandt: elite ball progressor, providing the incisive ball between the build-up & final pass.
+- Kimmich & Alaba playing more centrally has them dominate ball progression metrics for Bayern.
+
+Other players of interest:
+- The clairvoyant crossers: Filip Kostic (1.38), Christian Gunter (1.0), Niko Gießelmann (0.8) Completed Crosses into Penalty Area per 90 (1st-3rd in league). Kostic also boasts an impressive 2.6 KP per 90 (4th in the league).
+
+- RB Leipzig will surely miss Diego Demme who played a huge part in their build up. 6th in the league (just behind teammate Upamecano) in Passes into Final 3rd per 90 and leads Leipzig with 0.3 Through Balls per 90.
+
+R code used to create this viz: https://gist.github.com/Ryo-N7/756a73410c97753284a39260928ea813
+
+Inspired by @jcperez_'s plots: https://twitter.com/jcperez_/status/1215226713157840898

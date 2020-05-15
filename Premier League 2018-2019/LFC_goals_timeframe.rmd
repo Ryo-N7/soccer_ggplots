@@ -1,0 +1,143 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "November 24, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r message=FALSE}
+library(tidyverse)
+library(extrafont)
+loadfonts()
+```
+
+
+
+```{r}
+liv_goals <- data.frame(
+  goals_for = c(7, 9, 7),
+  goals_against = c(1, 0, 4),
+  GD = c(6, 9, 3),
+  time_frame = c("0-30th Minute", "31-60th Minute", "61-90th Minute")
+)
+```
+
+```{r}
+liv_goals %>% 
+  ggplot(aes(time_frame)) +
+  geom_linerange(aes(ymin = goals_against, ymax = goals_for), color = "grey", size = 2) +
+  geom_point(aes(y = goals_for), shape = 21, 
+             color = "black", fill = "red", size = 3.5) +
+  geom_point(aes(y = goals_against), shape = 21, 
+             color = "black", fill = "black", size = 3.5) +
+  scale_y_continuous(breaks = scales::pretty_breaks(), limits = c(0, 10),
+                     name = "Goals") +
+  annotate(geom = "label", x = 1.05, y = 7, hjust = 0, label = "Goals For") +
+  annotate(geom = "label", x = 1.05, y = 1, hjust = 0, label = "Goals Against") +
+  theme_minimal() +
+  theme(axis.title.x = element_blank(),
+        #plot.background = element_rect(color = "red"),
+        #panel.background = element_rect(fill = "red"),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        text = element_text(family = "Roboto Condensed"))
+```
+
+
+
+
+
+
+```{r}
+library(rvest)
+
+url <- "https://en.wikipedia.org/wiki/2017%E2%80%9318_Liverpool_F.C._season"
+
+liv_raw <- url %>% 
+  read_html() %>% 
+  html_nodes("table.wikitable:nth-child(1)") %>% 
+  html_table() %>% 
+  flatten_df() %>% 
+  mutate(Season = "2017-2018")
+
+url2 <- "https://en.wikipedia.org/wiki/2016%E2%80%9317_Liverpool_F.C._season"
+
+liv_raw2 <- url2 %>% 
+  read_html() %>% 
+  html_nodes("table.wikitable:nth-child(1)") %>% 
+  html_table() %>% 
+  flatten_df() %>% 
+  mutate(Season = "2016-2017")
+
+url3 <- "https://en.wikipedia.org/wiki/2015%E2%80%9316_Liverpool_F.C._season"
+
+liv_raw3 <- url3 %>% 
+  read_html() %>% 
+  html_nodes("table.wikitable:nth-child(1)") %>% 
+  html_table() %>% 
+  flatten_df() %>% 
+  mutate(Season = "2015-2016")
+
+liv_clean <- function(data = data) {data %>% 
+  gather(key = "Match", value = "stat", -Matchday, -Season) %>% 
+  spread(Matchday, stat) %>% 
+  mutate(Match = Match %>% as.numeric) %>% 
+  rename("Home-Away" = "Ground") %>% 
+  arrange(Match) %>% 
+  mutate(Points = case_when(
+    Result == "W" ~ 3,
+    Result == "L" ~ 0,
+    Result == "D" ~ 1
+  )) %>% 
+  mutate(CP = cumsum(Points)) }
+
+liv_list <- list(liv_raw, liv_raw2, liv_raw3)
+
+liv_all <- liv_list %>% map(~ liv_clean(data = .)) %>% 
+  reduce(rbind) %>% 
+  mutate(Position = as.numeric(Position))
+
+```
+
+```{r}
+library(gganimate)
+library(ggtextures)
+
+# Isotope?
+liv_all %>% 
+  mutate(image = "https://vectors.pro/wp-content/uploads/2018/04/liverpool-fc-football-club-logo-vector.png") %>% 
+  ggplot(aes(x = Season, y = CP, image = image)) +
+  geom_isotype_col(position = "identity") +
+  #geom_col(position = "identity") +
+  theme_minimal() +
+  transition_states(Match, transition_length = 1.5, state_length = 5) +
+  labs(title = "Matchday {closest_state}")
+
+```
+
+
+```{r}
+col <- c(`2015-2016` = "#fc9272", `2016-2017` = "#ef3b2c", `2017-2018` = "#a50f15")
+
+liv_all %>% 
+  ggplot(aes(x = Match, y = Position, group = Season, color = Season)) +
+  geom_path(show.legend = FALSE) +
+  geom_point(show.legend = FALSE) +
+  scale_x_continuous(breaks = c(1, 5, 10, 15, 20, 25, 30, 35, 38), 
+                     labels = c(1, 5, 10, 15, 20, 25, 30, 35, 38)) +
+  scale_y_reverse(breaks = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13), 
+                  labels = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13),
+                  sec.axis = sec_axis(~ .)) +
+  scale_color_manual(values = col) +
+  theme_minimal() +
+  theme(panel.grid.minor.y = element_blank(),
+        text = element_text(family = "Roboto Condensed"))
+
+```
+

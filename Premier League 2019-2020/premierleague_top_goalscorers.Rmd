@@ -1,0 +1,637 @@
+---
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+timeline bump chart reach ___ milestone (georgios hockey TT viz)
+- if data granular enough then do by game-level instead of season-level
+- by minutes played instead??
+- Premier League: 50 goals, 100 goals, 150, total
+- club logos next to player names?
+
+# pkgs
+
+```{r, message=FALSE, warning=FALSE}
+pacman::p_load(dplyr, tidyr, purrr, polite, scales,  
+               ggplot2, ggtext, tibble, stringr,
+               rvest, glue, extrafont, ggbump, forcats)
+loadfonts()
+```
+
+# grab player name + IDs
+
+```{r}
+player_name_df <- tibble(name = c("alan-shearer", "wayne-rooney", "andy-cole",
+                                  "sergio-aguero", "frank-lampard", "thierry-henry",
+                                  "robbie-fowler", "jermain-defoe", 
+                                  "michael-owen", "les-ferdinand"), 
+                         id = c(3110, 3332, 3238, 26399, 3163, 
+                                3207, 3225, 3875, 1397, 3645))
+```
+
+
+# scrape function
+
+
+```{r}
+get_goalscoring_timeline <- function(name, id) {
+  
+  base_url <- glue::glue("https://www.transfermarkt.com/{name}/leistungsdatendetails/spieler/{id}/saison//verein/0/liga/0/wettbewerb/GB1/pos/0/trainer_id/0/plus/1")
+  
+  session <- bow(base_url)
+  
+  base_raw <- scrape(session) %>% 
+    html_nodes("div.responsive-table:nth-child(3) > table:nth-child(1)") %>% 
+    html_table(fill = TRUE) %>% 
+    .[[1]] %>% 
+    janitor::clean_names() %>% 
+    slice(-n())
+  
+  goal_timeline_df <- base_raw %>% 
+    select(date, home = home_team_2, away = away_team_2,
+           result, goal = x, assist = x_2,
+           sub_in = x_7, sub_out = x_8, minutes = x_9) %>% 
+    mutate(date = lubridate::mdy(date),
+           minutes =  
+             if_else(str_detect(minutes, "'"), 
+                     str_replace_all(minutes, "'", ""), minutes),
+           minutes = if_else(str_detect(minutes, "^[0-9]+$"),
+                             minutes, "0") %>% as.numeric(),
+           goal = if_else(str_detect(goal, "^[0-9]+$"),
+                          goal, "0") %>% as.numeric(),
+           assist = if_else(str_detect(assist, "^[0-9]+$"),
+                            assist, "0") %>% as.numeric(),
+           total_goals = sum(goal),
+           total_assists = sum(assist),
+           name = glue::glue("{name}") %>% 
+             str_replace_all(., "-", " ") %>% 
+             str_to_title(.),
+           link = base_url) %>% 
+    ## separate result
+    separate(result, into = c("home_goal", "away_goal"), 
+             sep = ":", convert = TRUE) %>% 
+    ## home - away and rank
+    mutate(home_rank = home %>% str_extract("[0-9]+") %>% as.numeric,
+           away_rank = away %>% str_extract("[0-9]+") %>% as.numeric,
+           home = home %>% str_remove_all("\\(.*\\)"),
+           away = away %>% str_remove_all("\\(.*\\)")) %>% 
+    mutate(cumsum_goals = cumsum(goal), # calculate running total
+           cumsum_mins = cumsum(minutes),
+           ms50 = detect_index(cumsum_goals, ~. >= 50), # find the first game that the total goals was over 500 
+           ms100 = detect_index(cumsum_goals, ~. >= 100),
+           ms150 = detect_index(cumsum_goals, ~. >= 150),
+           msmax = which.max(cumsum_goals)) %>% 
+    select(name, everything())
+  
+  return(goal_timeline_df)
+}
+```
+
+
+
+```{r}
+goal_timeline_df_raw <- map2(player_name_df$name, player_name_df$id, 
+                             ~ get_goalscoring_timeline(name = .x, id = .y)) %>% 
+  bind_rows() %>% 
+  group_by(name) %>% 
+  mutate(index = row_number()) %>% 
+  select(index, everything())
+
+glimpse(goal_timeline_df_raw)
+```
+
+# raw data
+
+```{r}
+saveRDS(goal_timeline_df_raw, file = here::here("data/goal_timeline_df_raw_42920.RDS"))
+```
+
+```{r}
+goal_timeline_df_raw <- readRDS(here::here("data/goal_timeline_df_raw_42920.RDS"))
+```
+
+
+
+
+# clean data
+
+- player name
+- nationality
+- minutes to reach 50 goals
+- minutes to reach 100 goals
+- minutes to reach 150 goals
+- minutes to reach TOTAL goals
+- total minutes
+- total goals (goals in transfermarkt different than PL website, defer to PL website as the true value)
+- penalties
+- assists (keep in mind transfermarkt's assist counting quirks...)
+
+
+```{r}
+goal_timeline_df_raw %>% 
+  group_by(name) %>% 
+  summarize(tot_mins = sum(minutes)) -> tot_mins_played
+```
+
+
+```{r}
+epl_topscorers_df_clean <- tibble(
+  player = c("Alan Shearer", "Wayne Rooney", "Andy Cole", "Sergio Agüero", 
+           "Frank Lampard", "Thierry Henry", "Robbie Fowler", 
+           "Jermain Defoe", "Michael Owen"),
+  nationality = c("England", "England", "England", "Argentina", "England",
+                  "France", "England", "England", "England"),
+  min50 = c(5351, 10438, 5844, 5709, 23360, 6146, 7619, 11163, 7646),
+  min100 = c(10586, 18607, 14962, 10672, 34499, 13016, 14971, 19538, 14116),
+  min150 = c(18307, 25303, 22458, 16099, 44172, 18398, 25610, 29190, 22986),
+  minTOTAL = c(38190, 36969, 30982, 18943, 48866, 21310, 27509, 32411, 22986),
+  total_mins = c(38200, 38027, 31613, 19250, 48912, 21310, 27964, 32651, 23021),
+  total_goals = c(260, 208, 187, 180, 177, 175, 163, 162, 150),
+  total_assists = c(12, 111, 32, 53, 118, 77, 12, 27, 8)
+)
+
+glimpse(epl_topscorers_df_clean)
+```
+
+## Alan Shearer
+
+alan50: 5424 - 90 + 17 = 5351
+alan100: 10636 - 90 + 40 = 10586
+alan150: 18315 - 90 + 82 = 18307
+alanTOTAL: 38200 - 10 = 38190
+
+TOT mins: 38200
+TOT goals: 260 
+TOT assists: 12
+
+## Shrek
+
+shrek50: 10522 - 90 + 6 = 10438
+shrek100: 18660 - 90 + 37 = 18607
+shrek150: 25364 - 90 + 29 = 25303
+shrekTOTAL: 36985 - 89 + 73 = 36969
+
+TOT mins: 38027
+TOT goals: 208
+TOT assists: 111
+
+## Andy Cole
+
+acole50: 5847 - 90 + 87 = 5844
+acole100: 14992 - 90 + 60 = 14962
+acole150: 22470 - 90 + 78 = 22458
+acoleTOTAL: 30983 - 90 + 89 = 30982
+
+TOT mins: 31613
+TOT goals: 187
+TOT assists: 32
+
+
+andycole50: 
+93-94 (3597) 
++ (24*90 = 2160) + 87 (Mar 4, 1995 Man Utd vs. Ipswich Town) = 5844
+94-95 (3194) >> 55
+95-96 (2710) >> 66
+96-97 (1034) >> 72
+97-98 (2754) >> 87
+andycole100: 13289 + (15*90) + (69+22+21+64+70+16) + 60 (Feb. 17, Utd - Arse) = 14961
+98-99 (2355) >> 104
+99-00 (1997) >> 123
+00-01 (1317) >> 132
+01-02 (1989) >> 145
+andycole150: 19156 + (14*90) + (45+71+56) + 78 (Dec. 28, 2002 Blackburn vs. WestHam) = 20666 
+02-03 (2875) >> 152
+03-04 (2616) >> 163
+04-05 (2510) >> 175
+05-06 (1766) >> 184
+andycoleTOTAL:  30714 + (18+13+32+10+45+24+27+6+3) + 89 (Dec. 30, 2006 P'mouth vs Bolton) = 30981
+06-07 (690) >> 187
+07-08 (236)
+
+TOT mins: 31640
+
+
+## Sergio Aguero
+
+aguero50: 5739 - 45 + 15 = 5709
+aguero100: 10748 - 90 + 14 = 10672
+aguero150: 16177 - 90 + 12 = 16099
+agueroTOTAL: 18960 - 23 + 6 = 18943
+
+TOT mins: 19250
+TOT goals: 180
+TOT assists: 53
+
+
+## Lamps
+
+frank50: 23416 - 90 + 34 = 23360
+frank100: 34538 - 90 + 51 = 34499
+frank150: 44217 - 90 + 45 = 44172
+frankTOTAL: 48912 - 77 + 31 = 48866
+
+TOT mins: 48912
+TOT goals: 177
+TOT assists: 118
+
+## Thierry Henry
+
+henry50: 6191 - 90 + 45 = 6146
+henry100: 13075 - 90 + 31 = 13016
+henry150: 18420 - 90 + 68 = 18398
+henryTOTAL: 21310 - 24 + 24 = 21310
+
+TOT mins: 21310
+TOT goals: 176
+TOT assists: 77
+
+
+## God
+
+god50: 7622 - 90 + 87 7619
+god100: 15024 - 90 + 37 = 14971
+god150: 25663 - 90 + 37 = 25610
+godTOTAL: 27574 - 90 + 25 = 27509
+
+TOT mins: 27964
+TOT goals: 162
+TOT assists: 12
+
+
+## Jermain Defoe
+
+defoe50: 11204 - 83 + 42 = 11163
+defoe100: 19593 - 90 + 35 = 19538
+defoe150: 29206 - 90 + 74 = 29190
+defoeTOTAL: 32411 - 23 + 23 = 32411
+
+TOT mins: 32651 
+TOT goals: 163
+TOT assists: 27
+
+## Michael Owen
+
+owen50: 7672 - 90 + 64 = 7646
+owen100: 14157 - 90 + 49 = 14116
+owen150: 22986 - 5 + 5 = 22986
+owenTOTAL: 22986
+
+TOT mins: 23021
+TOT goals: 150
+TOT assist: 8
+
+
+```{r}
+base_url <- "https://www.transfermarkt.com/michael-owen/leistungsdatendetails/spieler/1397/saison//verein/0/liga/0/wettbewerb/GB1/pos/0/trainer_id/0/plus/1"
+
+session <- bow(base_url)
+
+"div.responsive-table:nth-child(3) > table:nth-child(1)"
+"div.responsive-table:nth-child(3) > table:nth-child(1) > tbody:nth-child(2)"
+
+base_raw <- scrape(session) %>% 
+  html_nodes("div.responsive-table:nth-child(3) > table:nth-child(1)") %>% 
+  html_table(fill = TRUE) %>% 
+  .[[1]] %>% 
+  janitor::clean_names() %>% 
+  slice(-n())
+
+glimpse(base_raw)
+```
+
+
+
+
+```{r}
+base_raw %>% 
+  select(date, home = home_team_2, away = away_team_2,
+         result, goal = x, assist = x_2,
+         sub_in = x_7, sub_out = x_8, minutes = x_9) %>% 
+  mutate(date = lubridate::mdy(date),
+         minutes =  
+           if_else(str_detect(minutes, "'"), 
+                   str_replace_all(minutes, "'", ""), minutes),
+         minutes = if_else(str_detect(minutes, "^[0-9]+$"),
+                           minutes, "0") %>% as.numeric(),
+         goal = if_else(str_detect(goal, "^[0-9]+$"),
+                        goal, "0") %>% as.numeric(),
+         assist = if_else(str_detect(assist, "^[0-9]+$"),
+                          assist, "0") %>% as.numeric()) %>% 
+  ## separate result
+  separate(result, into = c("home_goal", "away_goal"), 
+           sep = ":", convert = TRUE) %>% 
+  ## home - away and rank
+  mutate(home_rank = home %>% str_extract("[0-9]+") %>% as.numeric,
+         away_rank = away %>% str_extract("[0-9]+") %>% as.numeric,
+         home = home %>% str_remove_all("\\(.*\\)"),
+         away = away %>% str_remove_all("\\(.*\\)")) %>% 
+  mutate(cumsum_goals = cumsum(goal), # calculate running total
+         cumsum_mins = cumsum(minutes),
+    r50 = detect_index(cumsum_goals, ~. >= 50), # find the first game that the total goals was over 500 
+    r100 = detect_index(cumsum_goals, ~. >= 100),
+    r150 = detect_index(cumsum_goals, ~. >= 150),
+    total_goals = sum(goal),
+    total_assists = sum(assist))
+```
+
+
+
+
+
+
+
+
+
+# reshape
+
+```{r}
+options(scipen = 999)
+
+epl_topscorers_df <- epl_topscorers_df_clean %>% 
+  mutate(goalsper90 = total_goals / total_mins * 90,
+         assistsper90 = total_assists / total_mins * 90) %>% 
+  pivot_longer(cols = min50:minTOTAL, 
+               names_to = "milestone", values_to = "value") %>% 
+  mutate(color = case_when(
+    player == "Alan Shearer" ~ "#241F20",
+    player == "Sergio Agüero" ~ "#6CABDD",
+    player == "Wayne Rooney" ~ "#FF8C00",
+    player == "Andy Cole" ~ "#009036",
+    player == "Frank Lampard" ~ "#034694",
+    player == "Robbie Fowler" ~ "#fdbc00",
+    player == "Michael Owen" ~ "#c8102E",
+    player == "Jermain Defoe" ~ "#132257",
+    player == "Thierry Henry" ~ "#b2101d",
+    TRUE ~ "grey80"),
+    milestone = as_factor(milestone) %>% 
+      fct_relevel("min50", "min100", "min150", "minTOTAL"))
+
+x_labels <- c("Number of Minutes\nto Reach 50 Goals", 
+              "...to Reach 100 goals", 
+              "...to Reach 150 goals", 
+              "...to Reach \nTotal Premier League Goals")
+
+glimpse(epl_topscorers_df)
+```
+
+add season labels
+add Goals per 90
+add Assists per 90
+add # of hattricks
+
+left-hand top scorer bar chart: additional info inside bars
+->>> bars segue + shrink to bump chart?
+
+
+
+- right-to-left? with right bumps growing into bars?
+- colored name in << MIDDLE >>
+- right TOTAL, left TIMELY
+
+
+
+
+- erase player name + total goals from middle >> bring bar through right-hand y-axis and into a flipped bar chart of total goals?
+
+
+
+
+- do the total goal ordering in between TOT goals and y-axis
+-- geom_text_repel with factor ordered y levels
+-- color lines point + intersect in interim and point as ARROWS to player name
+
+
+## info text
+
+```{r}
+info_df <- tibble(
+  x = rep(5.3, 9),
+  y = c(7500, 12500, 17500, 
+        22500, 27500, 32500, 
+        37500, 42500, 47500),
+  text = c("Alan Shearer: 260", "Wayne Rooney: 208", "Andy Cole: 187",
+           "Sergio Agüero: 180", "Frank Lampard: 177", "Thierry Henry: 175",
+           "Robbie Fowler: 163", "Jermain Defoe: 162", "Michael Owen: 150"),
+  color = c("#241F20", "#FF8C00", "#009036",
+            "#6CABDD", "#034694", "#b2101d", 
+            "#fdbc00", "#132257", "#d00027"))
+
+glimpse(info_df)
+```
+
+## segments
+
+```{r}
+arrow_df <- tibble(
+  x = c(rep(4, 5)),
+  xend = c(rep(4.2, 5)), ## 4.4
+  y = c(49250, 38500, 37000, 31250, 19000),
+  yend = c(27500, 7500, 17500, 12500, 22500), # 27500, 7500, 17500, 12500, 22500
+  color = c("blue", "black", "red", "darkred", "lightblue")
+)
+```
+
+
+```{r}
+arrow_df <- tibble(
+  x = c(4, 4.2),
+  xend = c(4.2, 4.4), 
+  y = c(49250, 38375),
+  yend = c(38375, 27500), 
+  curvature = c(0.25, -0.25),
+  color = c("blue")
+)
+```
+
+# plot
+
+```{r fig.width=16, fig.height=11}
+ggplot() + 
+  ## left arrows (ggbump)
+  geom_bump(data = epl_topscorers_df , #%>% filter(color == "grey80")
+            aes(x = milestone, y = value, group = player,
+                color = color), size = 5, smooth = 7) +
+  ## highlighted
+  # geom_bump(data = epl_topscorers_df %>% filter(color != "grey80"),
+  #           aes(x = milestone, y = value, group = player,
+  #               color = color), size = 5, smooth = 7) +
+  ## y-axis arrow
+  geom_segment(aes(x = Inf, xend = Inf, y = 1000, yend = 49000), size = 0.8,
+               arrow = arrow(length = unit(0.6, "cm"))) +
+  ## right arrows
+  ## Henry
+  geom_curve(aes(x = 4, xend = 4.2, y = 21310, yend = 26905), 
+             curvature = -0.35, color = "#b2101d",
+             angle = 95, size = 4.5) +
+  geom_curve(aes(x = 4.2, xend = 4.4, y = 26905, yend = 32600), 
+             curvature = 0.35, color = "#b2101d", lineend = "round",
+             angle = 95, size = 4.25) +
+  geom_segment(aes(x = 4.45, xend = 4.48, y = 32500, yend = 32500),
+               color = "#b2101d", linejoin = "round", size = 1.25,
+               arrow = arrow(length = unit(0.8, "cm"), angle = 40,
+                             type = "closed")) +
+  ## Andy Cole
+  geom_curve(aes(x = 4, xend = 4.2, y = 31150, yend = 27250), 
+             curvature = 0.25, color = "#009036",
+             angle = 45, size = 4.5) +
+  geom_curve(aes(x = 4.2, xend = 4.45, y = 27050, yend = 17400), 
+             curvature = -0.45, color = "#009036",
+             angle = 45, size = 4.5) +
+  geom_segment(aes(x = 4.45, xend = 4.48, y = 17500, yend = 17500),
+               color = "#009036", linejoin = "round", size = 1.25,
+               arrow = arrow(length = unit(0.8, "cm"), angle = 40,
+                             type = "closed")) +
+  ## Robbie Fowler
+  geom_curve(aes(x = 4, xend = 4.2, y = 27500, yend = 32732), 
+             curvature = -0.35, color = "#fdbc00",
+             angle = 95, size = 4.5) +
+  geom_curve(aes(x = 4.2, xend = 4.45, y = 32732, yend = 37600), 
+             curvature = 0.35, color = "#fdbc00", lineend = "round",
+             angle = 95, size = 4.25) +
+  geom_segment(aes(x = 4.45, xend = 4.48, y = 37500, yend = 37500),
+               color = "#fdbc00", linejoin = "round", size = 1.25,
+               arrow = arrow(length = unit(0.8, "cm"), angle = 40,
+                             type = "closed")) +
+  ## Defoe
+  geom_curve(aes(x = 4, xend = 4.2, y = 32500, yend = 37575.5), 
+             curvature = -0.35, color = "#132257",
+             angle = 95, size = 4.5) +
+  geom_curve(aes(x = 4.2, xend = 4.45, y = 37575.5, yend = 42700), 
+             curvature = 0.35, color = "#132257", lineend = "round",
+             angle = 95, size = 4.25) +
+  geom_segment(aes(x = 4.45, xend = 4.48, y = 42500, yend = 42500),
+               color = "#132257", linejoin = "round", size = 1.25,
+               arrow = arrow(length = unit(0.8, "cm"), angle = 40,
+                             type = "closed")) +
+  ## Owen
+  geom_curve(aes(x = 4, xend = 4.2, y = 23021, yend = 35260.5), 
+             curvature = -0.35, color = "#d00027",
+             angle = 125, size = 4.5) +
+  geom_curve(aes(x = 4.2, xend = 4.42, y = 35260.5, yend = 47700), 
+             curvature = 0.35, color = "#d00027", lineend = "round",
+             angle = 115, size = 4.25) +
+  geom_segment(aes(x = 4.45, xend = 4.48, y = 47500, yend = 47500),
+               color = "#d00027", linejoin = "round", size = 1.25,
+               arrow = arrow(length = unit(0.8, "cm"), angle = 40,
+                             type = "closed")) +
+  ## Shearer
+  geom_curve(aes(x = 4, xend = 4.2, y = 38500, yend = 23000), 
+             curvature = 0.25, color = "#241F20",
+             angle = 45, size = 4.5) +
+  geom_curve(aes(x = 4.2, xend = 4.45, y = 23000, yend = 7300), 
+             curvature = -0.45, color = "#241F20",
+             angle = 45, size = 4.25) +
+  geom_segment(aes(x = 4.45, xend = 4.48, y = 7500, yend = 7500),
+               color = "#241F20", linejoin = "round", size = 1.25,
+               arrow = arrow(length = unit(0.8, "cm"), angle = 40,
+                             type = "closed")) +
+  ## Rooney
+  geom_curve(aes(x = 3.99, xend = 4.2, y = 37100, yend = 21875), 
+             curvature = 0.25, color = "#FF8C00",
+             angle = 45, size = 4.5) +
+  geom_curve(aes(x = 4.2, xend = 4.45, y = 21875, yend = 12400), 
+             curvature = -0.45, color = "#FF8C00",
+             angle = 45, size = 4.5) +
+  geom_segment(aes(x = 4.45, xend = 4.48, y = 12500, yend = 12500),
+               color = "#FF8C00", linejoin = "round", size = 1.25,
+               arrow = arrow(length = unit(0.8, "cm"), angle = 40,
+                             type = "closed")) +
+  ## Aguero
+  geom_curve(aes(x = 4, xend = 4.2, y = 19000, yend = 20750), 
+             curvature = -0.45, color = "#6CABDD",
+             angle = 45, size = 4.5) +
+  geom_curve(aes(x = 4.2, xend = 4.45, y = 20750, yend = 22500), 
+             curvature = 0.45, color = "#6CABDD", lineend = "round",
+             angle = 45, size = 4.5) +
+  geom_segment(aes(x = 4.45, xend = 4.48, y = 22500, yend = 22500),
+               color = "#6CABDD", linejoin = "round", size = 1.25,
+               arrow = arrow(length = unit(0.8, "cm"), angle = 40,
+                             type = "closed")) +
+  ## Lampard
+  geom_curve(aes(x = 4, xend = 4.2, y = 49150, yend = 38375), 
+             curvature = 0.25, color = "#034694",
+             angle = 45, size = 4.5) +
+  geom_curve(aes(x = 4.2, xend = 4.4, y = 38375, yend = 27350), 
+             curvature = -0.45, color = "#034694", lineend = "round",
+             angle = 45, size = 4.25) +
+  geom_segment(aes(x = 4.45, xend = 4.48, y = 27500, yend = 27500),
+               color = "#034694", linejoin = "round", size = 1.25,
+               arrow = arrow(length = unit(0.8, "cm"), angle = 40,
+                           type = "closed")) +
+  # geom_curve(data = arrow_df,
+  #            aes(x = x, xend = xend, y = y, yend = yend,
+  #                color = color), 
+  #            curvature = -0.25,
+  #            angle = 45, size = 4.5) +
+  ## separator
+  geom_vline(xintercept = 4, color = "grey80", size = 2.5) +
+  geom_text(data = info_df,
+            aes(x = x, y = y, 
+                label = text, colour = color), 
+            size = 6.5, hjust = "right", 
+            family = "Roboto Slab", fontface = "bold") +
+  # geom_text_repel(data = epl_topscorers_df %>% 
+  #                   filter(milestone == "minTOTAL", color == "grey80"),
+  #                 aes(x = milestone, y = value,
+  #                     label = paste0(player, ": ", total_goals),
+  #                     colour = color, segment.color = color),
+  #                 size = 8, segment.size = 2,
+  #                 nudge_x = 0.35, hjust = 0, direction = "y",
+  #                 box.padding = 1, point.padding = 0.5,
+  #                 family = "Roboto Condensed") +
+  ## scales
+  scale_color_identity() +
+  scale_x_discrete(expand = expansion(add = c(0.18, 1.4)), 
+                   labels = x_labels, position = "top") +
+  scale_y_reverse(position = "right", "Minutes Played\n",
+                  labels = scales::comma) + 
+  ## title/caption
+  annotate("text", x = 1.015, y = 45000, 
+           label = glue::glue("
+                              Number of Minutes Played to Reach 
+                              50, 100, 150, & Career Goals 
+                              for Players with 150 or More 
+                              Total Premier League Goals"), 
+           hjust = 0, size = 6.75, color = "black",
+           family = "Roboto Slab", fontface = "bold") +
+  annotate("text", x = 1.015, y = 51800, 
+           label = glue::glue("
+                              Data: transfermarkt.com | premierleague.com 
+                              Date: May 4th, 2020
+                              Graphic: Ryo Nakagawara (Twitter: @R_by_Ryo)"),
+           hjust = 0, size = 4, color = "black",
+           family = "Roboto Slab") +
+  coord_cartesian(clip = "off") +
+  theme(legend.position = "none",
+        text = element_text(family = "Roboto Slab", color = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 18),
+        axis.text = element_text(size = 16, color = "black", 
+                                 family = "Roboto Slab"),
+        panel.grid = element_line(color = "grey80"),
+        plot.background = element_rect(fill = "#FAEBD7"),
+        panel.background = element_rect(fill = "#FAEBD7"),
+        axis.ticks = element_blank(),
+        plot.margin = margin(40, 30, 40, 40))
+```
+
+## save
+
+```{r}
+ggsave(here::here("Premier League 2019-2020/output/EPL_topscorers_minutes2020.png"), width = 16, height = 11,
+       dpi = 320)
+```
+
+
+
+
+# Harry Kane
+
+
+```{r}
+hk10 <- get_goalscoring_timeline("harry-kane", 132098)
+```
+

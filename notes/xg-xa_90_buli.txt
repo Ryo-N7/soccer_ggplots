@@ -1,0 +1,8 @@
+Bayern's Attackers & Gladbach's Trident  (#RBLeipzig's Timo Werner as well) lead the #Bundesliga:  
+xG per 90 & xA per 90 📊📈!
+
+- #FCBayern 🔴: Lewandowski, Coutinho, Gnabry, Müller
+- #DieFohlen ⚫️: Plea, Thuram, Embolo
+
+#rstats #ggplot2 code: https://gist.github.com/Ryo-N7/fe35f47525e12c59e52deb5c24e88503
+@FBref

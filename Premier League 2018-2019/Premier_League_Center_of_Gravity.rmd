@@ -1,0 +1,201 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "December 8, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+- English Premier League version of https://www.chadbixby.com/2018/09/06/2018-09-06-the-nfl-nba-mlb-s-center-of-gravity/
+
+
+## packages
+
+```{r}
+pacman::p_load(rvest, dplyr, tidyr, ggplot2, purrr, ggmap, scales, stringr)
+```
+
+## web-scrape
+
+```{r}
+url <- "https://en.wikipedia.org/wiki/List_of_English_football_champions"
+
+# css selector: table.wikitable:nth-child(17)
+# table.wikitable:nth-child(15)
+
+eng_champ_raw <- url %>% 
+  read_html() %>% 
+  html_nodes("table.wikitable:nth-child(15)") %>% 
+  html_table() %>% 
+  flatten_df()
+
+eng_champ_clean <- eng_champ_raw %>% 
+  janitor::clean_names() %>% 
+  select(year, champions_number_of_titles) %>% 
+  transmute(year = year,
+            champions = gsub("[0-9]|\\(|\\)|\\[|\\]", "", 
+                             champions_number_of_titles) %>% trimws()) %>% 
+  slice(c(-24, -45))
+
+eng_PL_champ_raw <- url %>% 
+  read_html() %>% 
+  html_nodes("table.wikitable:nth-child(17)") %>% 
+  html_table() %>% 
+  flatten_df()
+
+eng_PL_champ_clean <- eng_PL_champ_raw %>% 
+  janitor::clean_names() %>% 
+  select(year, champions_number_of_titles) %>% 
+  transmute(year = year,
+            champions = gsub("[0-9]|\\(|\\)|\\[|\\]", "", 
+                             champions_number_of_titles) %>% trimws())
+
+eng_champions_df <- eng_champ_clean %>% 
+  bind_rows(eng_PL_champ_clean)
+
+# eng_champ_clean %>% 
+#   mutate(geo = geocode(champions, source = "dsk"))
+# some are more specific than others due to geocode() not getting the right 
+# location even trying different addresses
+# most are... close enough
+# eng_champions_df$champions %>% unique()
+
+eng_champ_location <- eng_champions_df %>% 
+  mutate(location_name = case_when(
+    champions == "Manchester United" ~ "Manchester, England",
+    champions == "Blackburn Rovers" ~ "Blackburn, England",
+    champions == "Arsenal" ~ "Holloway, England",
+    champions == "Chelsea" ~ "Chelsea, London, UK",
+    champions == "Manchester City" ~ "etihad stadium, england",
+    champions == "Leicester City" ~ "Leicester, England",
+    champions == "Sunderland" ~ "sunderland, england",
+    champions == "Aston Villa" ~ "aston, england",
+    champions == "Sheffield United" ~ "bramall lane, england",
+    champions %in% c("The Wednesday", "Sheffield Wednesday") ~ "hillsborough, england",
+    champions == "Liverpool" ~ "anfield, england",
+    champions == "Newcastle United" ~ "newcastle upon tyne, england",
+    champions == "Everton" ~ "everton, england",
+    champions == "West Bromwich Albion" ~ "west bromwich, england",
+    champions == "Burnley" ~ "burnley, england",
+    champions == "Huddersfield Town" ~ "huddersfield, england",
+    champions == "Portsmouth" ~ "portsmouth, england",
+    champions == "Tottenham Hotspur" ~ "tottenham, london, england",
+    champions == "Wolverhampton Wanderers" ~ "wolverhampton, england",
+    champions == "Leeds United" ~ "leeds, england",
+    champions == "Derby County" ~ "derby, england",
+    champions == "Nottingham Forest" ~ "nottingham, england",
+    champions == "Ipswich Town" ~ "ipswich, england"
+  )) %>% 
+  mutate_geocode(location_name, source = "dsk")
+
+saveRDS(object = eng_champ_location, "../data/eng_champ_location.RDS")
+```
+
+## Center of gravity
+
+```{r}
+# from https://www.chadbixby.com/2018/09/06/2018-09-06-the-eng_champ_location-nba-mlb-s-center-of-gravity/
+
+find_center <- function(df){
+  
+  df2 <- df %>%
+    mutate(rad_lon = lon*pi/180, rad_lat = lat*pi/180) %>% 
+    mutate(X = cos(rad_lat) * cos(rad_lon)) %>%
+    mutate(Y = cos(rad_lat) * sin(rad_lon)) %>%
+    mutate(Z = sin(rad_lat)) %>%
+    summarise(X = mean(X), Y = mean(Y), Z = mean(Z)) %>% #find mean
+    mutate(Lon = atan2(Y, X), Hyp = sqrt(X * X + Y * Y), Lat = atan2(Z, Hyp)) %>%  
+    select(Lon, Lat) %>%
+    mutate(Lon = Lon*180/pi, Lat = Lat*180/pi)
+  
+  # Lon <- df2$Lon
+  # Lat <- df2$Lat
+  
+  return(df2)
+}
+
+find_center2 <- function(df, lon, lat){
+  
+  df2 <- df %>%
+    mutate(rad_lon = lon*pi/180, rad_lat = lat*pi/180) %>% 
+    mutate(X = cos(rad_lat) * cos(rad_lon)) %>%
+    mutate(Y = cos(rad_lat) * sin(rad_lon)) %>%
+    mutate(Z = sin(rad_lat)) %>%
+    summarise(X = mean(X), Y = mean(Y), Z = mean(Z)) %>% #find mean
+    mutate(Lon = atan2(Y, X), Hyp = sqrt(X * X + Y * Y), Lat = atan2(Z, Hyp)) %>%  
+    select(Lon, Lat) %>%
+    mutate(Lon = Lon*180/pi, Lat = Lat*180/pi)
+  
+  # Lon <- df2$Lon
+  # Lat <- df2$Lat
+  
+  return(df2)
+}
+
+
+
+pl_center <- find_center(eng_champ_location)
+pl_center
+
+
+map(1:nrow(eng_champ_location) ~ 
+      eng_champ_location %>% 
+      mutate(lon_center = find_center()))
+
+eng_champ_location %>% 
+  rowwise() %>% 
+  mutate(cen_lon = find_center(.)) %>% View()
+
+eng_champ_location %>% 
+  purrrlyr::by_row(..f = find_center, .to = "coords", .collate = "list") %>% 
+  View()
+
+
+center_shift <- eng_champ_location %>% 
+  rowwise() %>% 
+  find_center()
+
+eng_champ_location %>% 
+  bind_cols(center_shift)
+
+eng_champ_location %>% 
+  mutate(id = row_number()) %>% 
+  tibbletime::rollify(.f = find_center(.), window = 2)
+  
+rolling_center <- tibbletime::rollify(.f = find_center, window = 2)
+rolling_center2 <- tibbletime::rollify(.f = find_center2, window = 2)
+
+eng_champ_location %>% 
+  mutate(cen = rolling_center2(.))
+
+
+# for loop...
+
+for (i in 1:nrow(eng_champ_location)) {
+  eng_champ_location$lon_center[i] <- find_center(eng_champ_location[1:i,])[[1]]
+  eng_champ_location$lat_center[i] <- find_center(eng_champ_location[1:i,])[[2]]
+}
+
+```
+
+
+
+## map
+
+```{r}
+UK <- map_data(map = "world", region = "UK") # changed map to "world"
+
+ggplot(data = UK, aes(x = long, y = lat, group = group)) + 
+  geom_polygon() +
+  coord_map(xlim = c(-4, 2), ylim = c(50, 57)) +
+  geom_path(data = eng_champ_location, 
+            aes(x = lon_center, y = lat_center, group = 1, color = year), 
+            show.legend = FALSE) +
+  geom_point(data = eng_champ_location, 
+            aes(x = lon, y = lat, group = 1))
+```
+
+nowhere near as interesting as MLB/NBA/NFL one! haha

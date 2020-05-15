@@ -1,0 +1,1056 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "December 26, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load packages
+
+```{r message=FALSE}
+pacman::p_load(tidyverse, scales, lubridate, ggrepel, stringi, magick, gapminder,
+               glue, extrafont, rvest, ggtextures, cowplot, countrycode, ggimage,
+               polite)
+# necessary for Roboto Condensed font
+loadfonts()
+```
+
+# Top goal scorers
+
+```{r}
+ac_top_scorers <- data.frame(
+  player = c("Ali Daei", "Ali Daei", "Ali Daei",
+             "Lee Dong Gook", "Lee Dong Gook",
+             "Naohiro Takahara", "Naohiro Takahara",
+             "Jassem Al-Houwaidi", "Jassem Al-Houwaidi",
+             "Younis Mahmoud", "Younis Mahmoud", "Younis Mahmoud", "Younis Mahmoud"),
+  country = c("Iran", "Iran", "Iran",
+              "South Korea", "South Korea",
+              "Japan", "Japan",
+              "Kuwait", "Kuwait",
+              "Iraq", "Iraq", "Iraq", "Iraq"),
+  tournament = c("1996", "2000", "2004",
+                 "2000", "2004",
+                 "2000", "2004",
+                 "1996", "2000",
+                 "2004", "2007", "2011", "2015"),
+  goals = as.numeric(c(8, 3, 3,
+            6, 4,
+            5, 4,
+            6, 2,
+            1, 4, 1, 2)),
+  total_goals = as.numeric(c(14, 14, 14,
+            10, 10,
+            9, 9,
+            8, 8,
+            8, 8, 8, 8))
+)
+
+# soccer ball images
+# https://i.pinimg.com/originals/e7/d7/19/e7d7190f0b5b3abd4f6c17e2c7989ec3.jpg
+# https://www.emoji.co.uk/files/microsoft-emojis/activity-windows10/8356-soccer-ball.png
+ac_top_scorers <- ac_top_scorers %>% 
+  mutate(image = case_when(
+    tournament == "2004" ~ "http://football-balls.com/ball_files/2004-asian-cup-adidas-roteiro-official-match-ball.png",
+    tournament == "2007" ~ "http://football-balls.com/ball_files/2007-asian-cup-mercurial-veloci-official-match-ball.png",
+    tournament == "2011" ~ "http://football-balls.com/ball_files/2011-asian-cup-nike-total-90-tracer-official-match-ball.png",
+    tournament == "2015" ~ "http://football-balls.com/ball_files/2015-asian-cup-nike-ordem-2-official-match-ball.png",
+    TRUE ~ "https://www.emoji.co.uk/files/microsoft-emojis/activity-windows10/8356-soccer-ball.png")) %>% 
+  mutate(country_code = country %>% 
+           countrycode(., origin = "country.name", destination = "iso2c"))
+
+
+ac_top_scorers %>% 
+  gather(key = "player", value = "tournament")
+
+ac_top_scorers %>% 
+  distinct(player, .keep_all = TRUE)
+```
+
+
+```{r, fig.width=8, fig.height=6}
+ac_top_graph <- ac_top_scorers %>% 
+  distinct(player, .keep_all = TRUE) %>% 
+  ggplot(aes(x = reorder(player, total_goals), y = total_goals,
+             image = image)) +
+  #ggimage::geom_emoji(aes(image = '26bd'), size = 0.06) +
+  geom_isotype_col(img_width = grid::unit(1, "native"), img_height = NULL,
+    ncol = NA, nrow = 1, hjust = 0, vjust = 0.5) +
+  coord_flip() +
+  #geom_flag(y = -1.5, aes(image = country_code), size = 0.1) +
+  scale_y_continuous(breaks = c(0, 2, 4, 6, 8, 10, 12, 14),
+                     expand = c(0, 0), 
+                     limits = c(0, 15)) +
+  #expand_limits(y = -2) +
+  ggthemes::theme_solarized() +
+  labs(title = "Top Scorers of the Asian Cup!",
+       subtitle = "Most goals in a single tournament: 8 (Ali Daei, 1996)",
+       y = "Number of Goals", x = NULL) +
+  theme(text = element_text(family = "Roboto Condensed"),
+        title = element_text(size = 18),
+        subtitle = element_text(size = 14),
+        axis.text = element_text(size = 12),
+        axis.line.y = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.ticks.y = element_blank())
+
+# scale them differently as flag sizes are different...
+pimage <- axis_canvas(ac_top_graph, axis = 'y') + 
+  draw_image("https://upload.wikimedia.org/wikipedia/commons/c/ca/Flag_of_Iran.svg", 
+             y = 13, scale = 1.5) +
+  draw_image("https://upload.wikimedia.org/wikipedia/commons/0/09/Flag_of_South_Korea.svg", 
+             y = 10, scale = 1.7) +
+  draw_image("https://upload.wikimedia.org/wikipedia/en/9/9e/Flag_of_Japan.svg", 
+             y = 7, scale = 1.7) +
+  draw_image("https://upload.wikimedia.org/wikipedia/commons/f/f6/Flag_of_Iraq.svg", 
+             y = 4, scale = 1.6) +
+  draw_image("https://upload.wikimedia.org/wikipedia/commons/a/aa/Flag_of_Kuwait.svg", 
+             y = 1, scale = 1.2)
+
+# insert the image strip into the bar plot and draw  
+ggdraw(insert_yaxis_grob(ac_top_graph, pimage, position = "left"))
+```
+
+
+```{r}
+theme_void
+ggthemes::theme_wsj
+ggthemes::theme_solarized
+```
+
+
+
+
+
+# Goals scored per tournament
+
+```{r}
+wiki_url <- "https://en.wikipedia.org"
+acup_url <- "https://en.wikipedia.org/wiki/AFC_Asian_Cup"
+
+cup_links <- read_html(acup_url) %>% 
+  html_nodes("br+ i a") %>% 
+  html_attr("href") %>% 
+  .[-17:-18]
+
+
+acup_df <- cup_links %>% 
+  as_data_frame() %>% 
+  mutate(cup = str_remove(value, "\\/wiki\\/") %>% str_replace_all("_", " ")) %>% 
+  rename(link = value)
+
+
+
+goals_info <- function(x) {
+  goal_info <- wiki_url %>% 
+    html_session() %>% 
+    jump_to(x) %>% 
+    html_nodes(".vcalendar") %>% 
+    html_table(header = FALSE) %>% 
+    flatten_df() %>% 
+    spread(key = X1, value = X2) %>% 
+    select(`Goals scored`) %>% 
+    mutate(`Goals scored` = str_remove_all(`Goals scored`, pattern = ".*\\(") %>% 
+             str_extract_all("\\d+\\.*\\d*") %>% as.numeric)
+}
+
+team_num_info <- function(x) {
+  team_num_info <- wiki_url %>% 
+    html_session() %>% 
+    jump_to(x) %>% 
+    html_nodes(".vcalendar") %>% 
+    html_table(header = FALSE) %>% 
+    flatten_df() %>% 
+    spread(key = X1, value = X2) %>% 
+    select(`Teams`) %>% 
+    mutate(`Teams` = as.numeric(`Teams`))
+}
+
+match_num_info <- function(x) {
+  match_num_info <- wiki_url %>% 
+    html_session() %>% 
+    jump_to(x) %>% 
+    html_nodes(".vcalendar") %>% 
+    html_table(header = FALSE) %>% 
+    flatten_df() %>% 
+    spread(key = X1, value = X2) %>% 
+    janitor::clean_names() %>% 
+    select(matches_played) %>% 
+    mutate(matches_played = as.numeric(matches_played))
+}
+
+
+# all together:
+goals_data <- acup_df %>% 
+  mutate(goals_per_game = map(acup_df$link, goals_info) %>% unlist,
+         team_num = map(acup_df$link, team_num_info) %>% unlist,
+         match_num = map(acup_df$link, match_num_info) %>% unlist)
+
+```
+
+```{r}
+ac_goals_df <- goals_data %>% 
+  mutate(label = cup %>% str_extract("[0-9]+") %>% str_replace("..", "'"),
+         team_num = case_when(
+           is.na(team_num) ~ 16,
+           TRUE ~ team_num
+         )) %>% 
+  arrange(cup) %>% 
+  mutate(label = factor(label, label),
+         team_num = c(4, 4, 4, 5, 6, 6, 10, 10, 10, 8, 12, 12, 16, 16, 16, 16))
+```
+
+
+```{r}
+ac_goals_df %>% 
+  ggplot(aes(x = label, y = goals_per_game, group = 1)) +
+  geom_line() +
+  #geom_point() +
+  scale_y_continuous(limits = c(NA, 5.35),
+                     breaks = c(1.5, 2, 2.5, 3, 3.5, 4, 4.5)) +
+  labs(x = "Tournament (Year)", y = "Goals per Game"#,
+       # title = "Goals per Game throughout the Asian Cup.",
+       # subtitle = "Odd dip throughout the 80s to early 90s..."
+       ) +
+  theme_minimal() +
+  theme(text = element_text(family = "Roboto Condensed"),
+        #title = element_text(size = 18),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10)) +
+  annotate(geom = "label", x = "'56", y = 5.23, family = "Roboto Condensed",
+           color = "black", #fill = "grey",
+           label = "Total Number of Games Played:", hjust = 0) +
+  annotate(geom = "text", x = "'60", y = 4.9, 
+           label = "6", family = "Roboto Condensed") +
+  annotate(geom = "segment", x = 1, xend = 3, y = 4.8, yend = 4.8) +
+  annotate(geom = "text", x = "'68", y = 4.9, 
+           label = "10", family = "Roboto Condensed") +
+  annotate(geom = "segment", x = 3.8, xend = 4.2, y = 4.8, yend = 4.8) +
+  annotate(geom = "text", x = "'72", y = 4.9, 
+           label = "13", family = "Roboto Condensed") +
+  annotate(geom = "segment", x = 4.8, xend = 5.2, y = 4.8, yend = 4.8) +
+  annotate(geom = "text", x = "'76", y = 4.9, 
+           label = "10", family = "Roboto Condensed") +
+  annotate(geom = "segment", x = 5.8, xend = 6.2, y = 4.8, yend = 4.8) +
+  annotate(geom = "text", x = "'84", y = 4.9, 
+           label = "24", family = "Roboto Condensed") +
+  annotate(geom = "segment", x = 7, xend = 9, y = 4.8, yend = 4.8) +
+  annotate(geom = "text", x = "'92", y = 4.9, 
+           label = "16", family = "Roboto Condensed") +
+  annotate(geom = "segment", x = 9.8, xend = 10.2, y = 4.8, yend = 4.8) +
+  annotate(geom = "text", x = 11.5, y = 4.9, 
+           label = "26", family = "Roboto Condensed") +
+  annotate(geom = "segment", x = 11, xend = 12, y = 4.8, yend = 4.8) +
+  annotate(geom = "text", x = 14.5, y = 4.9, 
+           label = "32", family = "Roboto Condensed") +
+  annotate(geom = "segment", x = 13, xend = 16, y = 4.8, yend = 4.8) +
+  annotate(geom = "text", x = 9, y = 4, family = "Roboto Condensed",
+           label = glue("
+                        Incredibly low amount of goals in Group B
+                        (15 in 10 Games) and in Knock-Out Stages
+                        (4 goals in 4, only one scored in normal time)")) +
+  annotate(geom = "segment", x = 9, xend = 9, y = 1.6, yend = 3.6,
+           color = "red") +
+  ggimage::geom_emoji(aes(image = '26bd'), size = 0.03) 
+
+ggsave(filename = paste0(here::here("Asian Cup 2019"), "/gpg_plot.png"))
+plot <- image_read(paste0(here::here("Asian Cup 2019"), "/gpg_plot.png"))
+```
+
+## add logo
+
+```{r}
+logo_raw <- image_read("https://upload.wikimedia.org/wikipedia/en/a/ad/2019_afc_asian_cup_logo.png")
+
+logo <- logo_raw %>% 
+  image_scale("100") %>% 
+  image_background("grey", flatten = TRUE) %>% 
+  image_border("grey", "600x10") %>% 
+  image_annotate(text = glue("Goals per Game throughout the Asian Cup"),
+                 color = "white", size = 30, 
+                 location = "+10+50", gravity = "northwest")
+
+final_plot <- image_append(image_scale(c(logo, plot), "500"), stack = TRUE)
+
+logo_proc <- logo_raw %>% image_scale("100")
+
+# create blank canvas
+a <- image_blank(width = 6, height = 0.8, color = "white")
+
+# combine with logo and shit it to the left, to the left
+b <- image_composite(image_scale(a, "x100"), image_scale(logo_proc, "x60"), 
+                     offset = "+500+25")
+logo_2 <- b %>% 
+  image_annotate(text = glue("Goals per Game throughout the Asian Cup"),
+                 color = "black", size = 18, font = "Roboto Condensed",
+                 location = "+63+50", gravity = "northwest")
+
+final2_plot <- image_append(image_scale(c(logo_2, plot), "500"), stack = TRUE)
+final2_plot
+image_write(final2_plot,
+            paste0(here::here("Asian Cup 2019"), "/gpg_plot_final.png"))
+```
+
+- annotate number of matches played on top as strip
+- fit avg goals per game per each sequence of # of matches >>> kinda like splines
+- add AFC logo? top right corner
+- put top scorer country as geom_point?
+- soccer ball emoji as geom_point?
+- patchwork to include top scoring countries + other additional info
+
+
+## add logo 2.0
+
+```{r}
+ac_goals_df %>% 
+  ggplot(aes(x = label, y = goals_per_game, group = 1)) +
+  geom_line() +
+  scale_y_continuous(limits = c(NA, 5.35),
+                     breaks = c(1.5, 2, 2.5, 3, 3.5, 4, 4.5)) +
+  labs(x = "Tournament (Year)", y = "Goals per Game",
+       title = "Goals per Game throughout the Asian Cup.") +
+  theme_minimal() +
+  theme(text = element_text(family = "Roboto Condensed"),
+        #title = element_text(size = 18),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10)) +
+  annotate(geom = "label", x = "'56", y = 5.23, family = "Roboto Condensed",
+           color = "black", 
+           label = "Total Number of Games Played:", hjust = 0) +
+  annotate(geom = "text", x = "'60", y = 4.9, 
+           label = "6", family = "Roboto Condensed") +
+  annotate(geom = "segment", x = 1, xend = 3, y = 4.8, yend = 4.8) +
+  annotate(geom = "text", x = "'68", y = 4.9, 
+           label = "10", family = "Roboto Condensed") +
+  annotate(geom = "segment", x = 3.8, xend = 4.2, y = 4.8, yend = 4.8) +
+  annotate(geom = "text", x = "'72", y = 4.9, 
+           label = "13", family = "Roboto Condensed") +
+  annotate(geom = "segment", x = 4.8, xend = 5.2, y = 4.8, yend = 4.8) +
+  annotate(geom = "text", x = "'76", y = 4.9, 
+           label = "10", family = "Roboto Condensed") +
+  annotate(geom = "segment", x = 5.8, xend = 6.2, y = 4.8, yend = 4.8) +
+  annotate(geom = "text", x = "'84", y = 4.9, 
+           label = "24", family = "Roboto Condensed") +
+  annotate(geom = "segment", x = 7, xend = 9, y = 4.8, yend = 4.8) +
+  annotate(geom = "text", x = "'92", y = 4.9, 
+           label = "16", family = "Roboto Condensed") +
+  annotate(geom = "segment", x = 9.8, xend = 10.2, y = 4.8, yend = 4.8) +
+  annotate(geom = "text", x = 11.5, y = 4.9, 
+           label = "26", family = "Roboto Condensed") +
+  annotate(geom = "segment", x = 11, xend = 12, y = 4.8, yend = 4.8) +
+  annotate(geom = "text", x = 14.5, y = 4.9, 
+           label = "32", family = "Roboto Condensed") +
+  annotate(geom = "segment", x = 13, xend = 16, y = 4.8, yend = 4.8) +
+  annotate(geom = "text", x = 9, y = 4, family = "Roboto Condensed",
+           label = glue("
+                        Incredibly low amount of goals in Group B
+                        (15 in 10 Games) and in Knock-Out Stages
+                        (4 goals in 4, only one scored in normal time)")) +
+  annotate(geom = "segment", x = 9, xend = 9, y = 1.6, yend = 3.6,
+           color = "red") +
+  ggimage::geom_emoji(aes(image = '26bd'), size = 0.03) 
+
+ggsave(filename = paste0(here::here("Asian Cup 2019"), "/gpg_title_plot.png"))
+plot <- image_read(paste0(here::here("Asian Cup 2019"), "/gpg_title_plot.png"))
+```
+
+
+```{r}
+add_logo <- function(plot_path, logo_path, logo_position, logo_scale = 10){
+
+    # Requires magick R Package https://github.com/ropensci/magick
+
+    # Useful error message for logo position
+    if (!logo_position %in% c("top right", "top left", "bottom right", "bottom left")) {
+        stop("Error Message: Uh oh! Logo Position not recognized\n  Try: logo_positon = 'top left', 'top right', 'bottom left', or 'bottom right'")
+    }
+
+    # read in raw images
+    plot <- magick::image_read(plot_path)
+    logo_raw <- magick::image_read(logo_path)
+
+    # get dimensions of plot for scaling
+    plot_height <- magick::image_info(plot)$height
+    plot_width <- magick::image_info(plot)$width
+
+    # default scale to 1/10th width of plot
+    # Can change with logo_scale
+    logo <- magick::image_scale(logo_raw, as.character(plot_width/logo_scale))
+
+    # Get width of logo
+    logo_width <- magick::image_info(logo)$width
+    logo_height <- magick::image_info(logo)$height
+
+    # Set position of logo
+    # Position starts at 0,0 at top left
+    # Using 0.01 for 1% - aesthetic padding
+
+    if (logo_position == "top right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "top left") {
+        x_pos = 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "bottom right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    } else if (logo_position == "bottom left") {
+        x_pos = 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    }
+
+    # Compose the actual overlay
+    magick::image_composite(plot, logo, offset = paste0("+", x_pos, "+", y_pos))
+
+}
+```
+
+
+
+```{r}
+add_logo(plot_path = "gpg_title_plot.png",
+         logo_path = "https://upload.wikimedia.org/wikipedia/en/a/ad/2019_afc_asian_cup_logo.png",
+         logo_position = "top right",
+         logo_scale = 15) -> plot_2.0
+
+plot_2.0
+```
+
+
+
+
+
+
+```{r}
+wiki_url %>% 
+  html_session() %>% 
+  jump_to("/wiki/2015_AFC_Asian_Cup") %>% 
+  html_nodes(".vcalendar") %>% 
+  html_table(header = FALSE) %>% 
+  flatten_df() %>% 
+  spread(key = X1, value = X2) %>% 
+  select(`Goals scored`) %>% 
+  mutate(`Goals scored` = str_remove_all(`Goals scored`, pattern = ".*\\(") %>% 
+           str_extract_all("\\d+\\.*\\d*") %>% as.numeric)
+```
+
+
+```{r}
+###
+
+one_cup <- "https://en.wikipedia.org/wiki/1968_AFC_Asian_Cup"
+
+copa <- one_cup %>% 
+  read_html() %>% 
+  html_nodes(".vcalendar") %>% 
+  html_table(header = FALSE) %>% 
+  flatten_df() %>% 
+  spread(key = X1, value = X2) %>% 
+  janitor::clean_names() %>% 
+  select(goals_scored) %>% 
+  mutate(`Goals scored` = str_remove_all(`Goals scored`, pattern = ".*\\(") %>% 
+           str_extract_all("\\d+\\.*\\d*") %>% as.numeric) # \\(.*)
+
+```
+
+
+
+
+
+
+
+
+# Asian Cup record
+
+```{r}
+# .navigation-not-searchable+ .jquery-tablesorter
+
+acup_url <- "https://en.wikipedia.org/wiki/AFC_Asian_Cup"
+
+session <- bow(acup_url)
+
+acup_winners_raw <- scrape(session) %>% 
+  html_nodes("#mw-content-text > div > table:nth-child(30)") %>% 
+  html_table() %>% 
+  flatten_df()
+```
+
+```{r}
+acup_winners_clean <- acup_winners_raw %>% 
+  janitor::clean_names() %>% 
+  slice(1:8) %>% 
+  select(-fourth_place, -total_top_four) %>% 
+  separate(winners, into = c("first_num", "first_place_year"), sep = " ", extra = "merge") %>% 
+  separate(runners_up, into = c("second_num", "second_place_year"), sep = " ", extra = "merge") %>% 
+  separate(third_place, into = c("third_num", "third_place_year"), sep = " ", extra = "merge") %>% 
+  mutate_all(funs(str_replace_all(., "–", "0"))) %>% 
+  mutate_at(vars(contains("num")), funs(as.numeric)) %>% 
+  mutate(team = if_else(team == "Israel1", "Israel", team)) %>% 
+  gather(key = "key", value = "value", -team, 
+         -first_place_year, -second_place_year, -third_place_year) %>% 
+  mutate(key = case_when(
+           key == "first_num" ~ "Champions",
+           key == "second_num" ~ "Runners-up",
+           key == "third_num" ~ "Third Place"
+         ),
+         key = key %>% fct_relevel(c("Champions", "Runners-up", "Third Place"))) %>% 
+  # hack-ish solution?
+  arrange(key, value) %>% 
+  mutate(team = as_factor(team),
+         order = row_number(),
+         image = team %>% 
+           countrycode(., origin = "country.name", destination = "iso2c"))
+```
+
+```{r, fig.width = 8, fig.height = 6}
+a <- acup_winners_clean %>% 
+  ggplot(aes(value, team, color = key)) +
+  geom_point(size = 5) +
+  scale_color_manual(values = c("Champions" = "#FFCC33",
+                                "Runners-up" = "#999999",
+                                "Third Place" = "#CC6600"),
+                     guide = FALSE) +
+  labs(x = "Number of Occurrence",
+       title = "Winners & Losers of the Asian Cup (1956-2015)",
+       subtitle = glue("
+                       Ordered by number of Asian Cup(s) won.
+                       Four-time Champions, Japan, only won their first in 1992!"),
+       caption = glue("
+                      Note: Israel was expelled by the AFC in 1974 while Australia joined the AFC in 2006.
+                      Source: Wikipedia
+                      By @R_by_Ryo")) +
+  facet_wrap(~key) +
+  theme_minimal() +
+  theme(text = element_text(family = "Roboto Condensed"),
+        title = element_text(size = 18),
+        plot.subtitle = element_text(size = 12),
+        axis.title.y = element_blank(),
+        axis.title.x = element_text(size = 12),
+        axis.text.y = element_text(size = 14),
+        axis.text.x = element_text(size = 12),
+        plot.caption = element_text(hjust = 0, size = 10),
+        panel.border = element_rect(fill = NA, colour = "grey20"),
+        panel.grid.minor.x = element_blank(),
+        strip.text = element_text(size = 16))
+
+ggsave("../Asian Cup 2019/asiancup_winners.png", width = 8, height = 6)
+
+# a +
+#   geom_flag(data = acup_winners_clean, 
+#             x = -2, aes(image = image), size = 0.15) +
+#   expand_limits(x = -2)
+
+# insert_yaxis_grob()
+
+#null_dev_env <- new.env(parent = emptyenv())
+# set_null_device("pdf")
+# cairo_pdf()
+# ggdraw(add_sub(a, label = "Source: Wikipedia\nBy @R_by_Ryo", x = 0.95, size = 8))
+# 
+# Cairo::Cairo(1000, 750, "test.png", bg = "white")
+# last_plot()
+# dev.off()
+```
+
+
+
+
+# Working hours & Productivity
+
+```{r}
+acup_url <- "https://en.wikipedia.org/wiki/2019_AFC_Asian_Cup"
+
+acup_kickoff <- acup_url %>% 
+  read_html() %>% 
+  html_nodes("time") %>% 
+  html_text() %>% 
+  as_data_frame()
+
+# time
+```
+
+- calculate +90 minutes for entire game duration
+- NOT count extra time or stoppage time
+- cross-refernce with other local time zones
+- count up total number of hours per each spectator country
+
+```{r}
+acup_kickoff %>% 
+  mutate(match_num = row_number(),
+         match_type = if_else(between(match_num, 37, 51), 
+                              "Knock-Out Stage", "Group Stage"),
+         time = value %>% str_replace("\\(.*\\)", "")) %>% 
+  mutate(time2 = hm(time),
+         time_ac2 = force_tz(time2, "Asia/Dubai"), # time based in UTC +4
+         time_jp = with_tz(time_ac2, tz = "Asia/Tokyo"), # UTC +4 time converted to Japan
+         time_jp_end = time_jp + hm("2 0"),
+         time_ac = with_tz(time2, tz = "America/New_York"),
+         timeZONE2 = tz(time_ac)) %>% 
+  mutate(diff = make_difftime(hour = 2),
+         int = as.interval(diff, time_ac2),
+         jp_start = hm("09:00") %>% with_tz(tz = "Asia/Tokyo"),
+         jp_end = hm("12:00") %>% with_tz(tz = "Asia/Tokyo"),
+         jp_work = as.interval(jp_start, jp_end),
+         overlap = int_overlaps(jp_work, int))
+
+
+acup_kickoff %>% 
+  mutate(match_num = row_number(),
+         match_type = if_else(between(match_num, 37, 51), 
+                              "Knock-Out Stage", "Group Stage"),
+         time = value %>% str_replace("\\(.*\\)", "")) %>% 
+  mutate(time2 = dmy_hm(time),
+         time3 = hour(time2))
+```
+
+
+
+```{r}
+#tz <- "Asia/"
+acup_times_df <- acup_kickoff %>% 
+  mutate(time = value %>% str_replace("\\(.*\\)", "")) %>% 
+  mutate(time2 = dmy_hm(time)) %>%  # proper time var
+  arrange(time2) %>% 
+  mutate(
+         # match num must arrangeDESC time2
+         match_num = row_number(),
+         match_type = if_else(between(match_num, 37, 51), 
+                              "Knock-Out Stage", "Group Stage"),
+         # 
+         is_weekday = wday(time2, label = TRUE),
+         time_ac2 = force_tz(time2, "Asia/Dubai"), # time based in UTC +4
+         time_jp = with_tz(time_ac2, tz = "Asia/Tokyo"), # UTC +4 time converted to Japan
+         time_jp_end = time_jp + hm("2 0"),
+         time_ac = with_tz(time2, tz = "America/New_York")) %>% # UTC +4 time to NYC
+  mutate(diff = make_difftime(hour = 2),
+         int = as.interval(diff, time_ac2),
+         # jp_start = ymd_hms("2019-01-05 09:00:00", tz = "Asia/Tokyo"),
+         # jp_end = ymd_hms("2019-01-05 12:00:00", tz = "Asia/Tokyo"),
+         jp_match = as.interval(time_jp, time_jp_end),
+         overlap = int_overlaps(jp_match, int)) %>% 
+  select(jp_match, int, overlap)
+
+# now create 9AM-5PM for Japan for each of those days on the match days!!
+# is_weekday? T/F
+
+acup_times_df$jp_work %within% acup_times_df$int
+
+```
+
+ymd_hms("2011-07-01 09:00:00", tz = "Pacific/Auckland")
+
+
+
+
+```{r}
+acup_kickoff %>% 
+  mutate(time = value %>% str_replace("\\(.*\\)", "")) %>% 
+  mutate(time2 = dmy_hm(time)) %>%  # proper time var
+  arrange(time2) %>% 
+  mutate(match_num = row_number(),
+         match_type = if_else(between(match_num, 37, 51), 
+                              "Knock-Out Stage", "Group Stage"),
+         # 
+         is_weekday = wday(time2, label = TRUE),
+         time_ac2 = force_tz(time2, "Asia/Dubai"), # time based in UTC +4
+         time_ny = with_tz(time_ac2, tz = "America/New_York"), # converted to NYC
+         time_ny_end = time_ny + hm("2 0")) %>% 
+  mutate(work_time = time %>% str_sub(end = -6),
+         work_time_begin = glue("{work_time} 09:00") %>% 
+           dmy_hm(tz = "America/New_York"),
+         work_time_end = glue("{work_time} 17:00") %>% 
+           dmy_hm(tz = "America/New_York")) %>% 
+  # create intervals
+  mutate(diff = make_difftime(hour = 2),
+         int = as.interval(diff, time_ac2),
+         int_ny_work = as.interval(work_time_begin, work_time_end),
+         ny_match = as.interval(time_ny, time_ny_end),
+         overlap = int_overlaps(ny_match, int_ny_work)) %>% 
+  # sum overlapping hours?
+  mutate(overlap_num = pmax(pmin(time_ny_end, work_time_end) - 
+                              pmax(time_ny, work_time_begin) + 1,0)) %>% 
+  mutate(overlap_laplap = map2_dbl(work_time_begin, work_time_end,
+                                   ~pmax((pmin(time_ny_end, .y)) - 
+                                          pmax(time_ny, .x) + 1), 0)) %>% 
+  select(ny_match, int, overlap, overlap_num, overlap_laplap)
+```
+
+
+## NY time
+
+```{r}
+acup_kickoff %>% 
+  mutate(time = value %>% str_replace("\\(.*\\)", "")) %>% 
+  mutate(time2 = dmy_hm(time)) %>%  # proper time var
+  arrange(time2) %>% 
+  mutate(match_num = row_number(),
+         match_type = if_else(between(match_num, 37, 51), 
+                              "Knock-Out Stage", "Group Stage"),
+         # 
+         is_weekday = wday(time2, label = TRUE),
+         time_ac2 = force_tz(time2, "Asia/Dubai"), # time based in UTC +4
+         time_jp = with_tz(time_ac2, tz = "Asia/Tokyo"), # UTC +4 time converted to Japan
+         time_jp_end = time_jp + hm("2 0")) %>% 
+  mutate(work_time = time %>% str_sub(end = -6),
+         work_time_begin = glue("{work_time} 09:00") %>% 
+           dmy_hm(tz = "Asia/Tokyo"),
+         work_time_end = glue("{work_time} 17:00") %>% 
+           dmy_hm(tz = "Asia/Tokyo")) %>% 
+  # create intervals
+  mutate(diff = make_difftime(hour = 2),
+         int = as.interval(diff, time_ac2),
+         int_jp_work = as.interval(work_time_begin, work_time_end),
+         jp_match = as.interval(time_jp, time_jp_end),
+         overlap = int_overlaps(jp_match, int_jp_work)) %>% 
+  select(jp_match, int, overlap)
+```
+
+
+# Japan vs. RIVALS
+
+- use Kaggle international results
+- results UP TO END OF WORLD CUP
+- filter AFC Asian Cup, Friendly, AFC Asian Cup qualification
+- filter Asia >>> take out UEFA countries like Kazakhstan, Georgia, Israel, etc.
+
+
+- https://www.kaggle.com/phjulien/a-journey-through-the-history-of-soccer/
+
+```{r}
+federation_files <- Sys.glob("../data/federation_affiliations/*")
+
+df_federations = data.frame(country = NULL, federation = NULL)
+for (f in federation_files) {
+    federation = basename(f)
+    content = read.csv(f, header=FALSE)
+    content <- cbind(content,federation=rep(federation, dim(content)[1]))
+    df_federations <- rbind(df_federations, content)
+}
+
+colnames(df_federations) <- c("country", "federation")
+
+df_federations <- df_federations %>% 
+  mutate(country = as.character(country) %>% str_trim(side = "both"))
+```
+
+```{r}
+results_raw <- read_csv("../data/results.csv")
+
+results_japan_raw <- results_raw %>% 
+  filter(home_team == "Japan" | away_team == "Japan") %>% 
+  rename(venue_country = country, 
+         venue_city = city) %>% 
+  mutate(match_num = row_number())
+
+# combine with federation affiliations
+results_japan_home <- results_japan_raw %>% 
+  left_join(df_federations, 
+            by = c("home_team" = "country")) %>% 
+  mutate(federation = as.character(federation)) %>% 
+  rename(home_federation = federation) #%>% 
+  View()
+
+results_japan_away <- results_japan_raw %>% 
+  left_join(df_federations, 
+            by = c("away_team" = "country")) %>% 
+  mutate(federation = as.character(federation)) %>% 
+  rename(away_federation = federation) #%>% 
+  View()
+
+# combine home-away
+results_japan_cleaned <- results_japan_home %>% 
+  full_join(results_japan_away)
+
+results_japan_cleaned %>% 
+  filter(is.na(home_federation)) %>% 
+  pull(home_team) %>% 
+  unique()
+
+results_japan_cleaned %>% 
+  filter(is.na(away_federation)) %>% 
+  pull(away_team) %>% 
+  unique()
+
+```
+
+
+
+```{r}
+results_japan_cleaned <- results_japan_cleaned %>% 
+  mutate(
+    home_federation = case_when(
+      home_team %in% c(
+        "China", "Manchukuo", "Burma", "Korea Republic", "Vietnam Republic",
+        "Korea DPR", "Brunei") ~ "AFC",
+      home_team == "USA" ~ "Concacaf",
+      home_team == "Bosnia-Herzegovina" ~ "UEFA",
+      TRUE ~ home_federation),
+    away_federation = case_when(
+      away_team %in% c(
+        "China", "Manchukuo", "Burma", "Korea Republic", "Vietnam Republic",
+        "Korea DPR", "Brunei", "Taiwan") ~ "AFC",
+      away_team == "USA" ~ "Concacaf",
+      away_team == "Bosnia-Herzegovina" ~ "UEFA",
+      TRUE ~ away_federation
+    ))
+```
+
+Now that it's nice and cleaned up I can reshape it so that the data is set from Japan's perspective.
+
+```{r}
+# reshape to Japan p.o.v.
+
+results_jp_asia <- results_japan_cleaned %>% 
+  # filter only for Japan games and AFC opponents
+  filter(home_team == "Japan" | away_team == "Japan",
+         home_federation == "AFC" & away_federation == "AFC") %>% 
+  select(-contains("federation"), -contains("venue"),
+         -neutral, -match_num,
+         date, home_team, home_score, away_team, away_score, tournament) %>% 
+  # reshape columns to Japan vs. opponent
+  mutate(
+    opponent = case_when(
+      away_team != "Japan" ~ away_team,
+      home_team != "Japan" ~ home_team),
+    home_away = case_when(
+      home_team == "Japan" ~ "home",
+      away_team == "Japan" ~ "away"),
+    japan_goals = case_when(
+      home_team == "Japan" ~ home_score,
+      away_team == "Japan" ~ away_score),
+    opp_goals = case_when(
+      home_team != "Japan" ~ home_score,
+      away_team != "Japan" ~ away_score)) %>% 
+  # results
+  mutate(
+    result = case_when(
+      japan_goals > opp_goals ~ "Win",
+      japan_goals < opp_goals ~ "Loss",
+      japan_goals == opp_goals ~ "Draw"),
+    result = result %>% as_factor() %>% fct_relevel(c("Win", "Draw", "Loss"))) %>% 
+  select(-contains("score"), -contains("team"))
+
+
+#results_jp_asia %>% View()
+```
+
+
+
+```{r}
+results_jp_asia %>% 
+  filter(opponent == "Uzbekistan") %>% 
+  group_by(result) %>% 
+  count()
+
+results_jp_asia %>% 
+  filter(opponent == "Turkmenistan")
+
+results_jp_asia %>% 
+  filter(opponent == "Oman") %>% 
+  knitr::kable()
+
+
+results_jp_asia %>% 
+  filter(opponent %in% c("Oman", "Uzbekistan", "Turkmenistan")) %>% 
+  group_by(result, opponent) %>% 
+  tally()
+
+results_jp_asia %>% 
+  filter(opponent %in% c("Oman", "Uzbekistan", "Turkmenistan")) %>% 
+  group_by(result, opponent) %>% 
+  summarize(j_g = sum(japan_goals),
+            o_g = sum(opp_goals),
+            n = n()) %>% 
+  spread(result, n)
+```
+
+
+
+```{r}
+results_jp_asia %>% 
+  filter(opponent %in% c("Australia", "Korea Republic", "Iran")) %>% 
+  group_by(result, opponent) %>% 
+  mutate(n = n()) %>% 
+  ungroup() %>% 
+  group_by(result, opponent) %>% 
+  summarize(j_g = sum(sum(japan_goals)),
+            o_g = sum(sum(opp_goals)),
+            n = n()) %>% 
+  ungroup() %>% 
+  spread(result, n) %>% 
+  group_by(opponent) %>% 
+  mutate(j_g = sum(j_g),
+         o_g = sum(o_g),
+         Win = sum(Win, na.rm = TRUE),
+         Draw = sum(Draw, na.rm = TRUE),
+         Loss = sum(Loss, na.rm = TRUE)) %>% 
+  distinct()
+
+```
+
+thankfull south korea should be on the otherside of the bracket and we would also only meet Iran in the semifinals
+
+Japan could meet Australia in the Quarters but without Aaron Mooy they're a much weaker side
+
+Japan have unfortunately lost our rising star, Nakajima, to injury but we have replaced him with World Cup hero Takashi Inui.
+
+```{r, echo=FALSE}
+results_jp_asia %>% 
+  filter(opponent %in% c("Oman", "Vietnam", "India")) %>% 
+  group_by(result, opponent) %>% 
+  mutate(n = n()) %>% 
+  ungroup() %>% 
+  group_by(home_away, result, opponent) %>% 
+  summarize(j_goals = sum(japan_goals),
+         oppo_goals = sum(opp_goals),
+         n = n()) %>% 
+  ungroup() %>% 
+  arrange(opponent, result) %>% 
+  spread(result, n) %>% 
+  group_by(opponent, home_away) %>% 
+  mutate(Win = if("Win" %in% names(.)){return(Win)} else{return(0)},
+         Draw = if("Draw" %in% names(.)){return(Draw)} else{return(0)},
+         Loss = if("Loss" %in% names(.)){return(Loss)} else{return(0)}) %>% 
+  summarize(Win = sum(Win, na.rm = TRUE),
+         Draw = sum(Draw, na.rm = TRUE),
+         Loss = sum(Loss, na.rm = TRUE),
+         j_goals = sum(j_goals),
+         o_goals = sum(oppo_goals)) %>% 
+  ungroup() %>% 
+  group_by(opponent) %>% 
+  do(add_row(.,
+             opponent = .$opponent %>% unique(),
+             home_away = "total",
+             Win = sum(.$Win, na.rm = TRUE),
+             Draw = sum(.$Draw, na.rm = TRUE),
+             Loss = sum(.$Loss, na.rm = TRUE),
+             j_goals = sum(.$j_goals),
+             o_goals = sum(.$o_goals)))
+```
+
+
+
+# waffle charts
+
+```{r}
+library(waffle)
+
+tibble(
+  team = c("Liverpool FC", "Draw", "Man. Utd"),
+  values = c(55, 46, 68)
+) -> liv_man
+
+cols <- c("Liverpool FC" = "red", 
+          "Draw" = "grey",
+          "Man. Utd" = "black")
+
+liv_man %>% 
+  mutate(team = as_factor(team) %>% fct_relevel("Liverpool FC", "Draw", "Man. Utd")) %>% 
+  ggplot(aes(fill = team, values = values)) +
+  geom_waffle(color = "white", size = 1.125, n_rows = 6) +
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_y_discrete(expand = c(0, 0)) +
+  scale_fill_manual(values = cols, name = NULL) +
+  #ggthemes::scale_fill_tableau(name=NULL) +
+  coord_equal() +
+  hrbrthemes::theme_ipsum_rc(grid = "") +
+  theme_enhance_waffle() +
+  labs(title = "The North West Derby")
+```
+
+
+## japan_versus function
+
+```{r}
+japan_versus <- function(data, ...) {
+  # filter 
+  filter_vars <- enquos(...)
+  
+  jp_vs <- data %>% 
+    filter(!!!filter_vars) %>% 
+    # count results type per opponent
+    group_by(result, opponent) %>% 
+    mutate(n = n()) %>% 
+    ungroup() %>% 
+    # sum amount of goals by Japan and opponent
+    group_by(result, opponent) %>% 
+    summarize(j_g = sum(japan_goals),
+              o_g = sum(opp_goals),
+              n = n()) %>% 
+    ungroup() %>% 
+    # spread results over multiple columns
+    spread(result, n) %>% 
+    # 1. failsafe against no type of result against an opponent
+    # 2. sum up counts per opponent
+    group_by(opponent) %>% 
+    mutate(Win = if("Win" %in% names(.)){return(Win)} else{return(0)},
+         Draw = if("Draw" %in% names(.)){return(Draw)} else{return(0)},
+         Loss = if("Loss" %in% names(.)){return(Loss)} else{return(0)}) %>% 
+    summarize(Win = sum(Win, na.rm = TRUE),
+              Draw = sum(Draw, na.rm = TRUE),
+              Loss = sum(Loss, na.rm = TRUE),
+              `Goals For` = sum(j_g),
+              `Goals Against` = sum(o_g))
+  
+  return(jp_vs)
+}
+```
+
+```{r, fig.height = 4, fig.width=3}
+library(waffle)
+library(extrafont)
+loadfonts(device = "win")
+
+results_jp_asia <- readRDS("../data/results_jp_asia.RDS")
+
+glimpse(results_jp_asia)
+
+jp_aus <- results_jp_asia %>% 
+  japan_versus(opponent == "Australia") %>% 
+  select(-opponent, Japan = Win, Australia = Loss) %>% 
+  gather(key = "team", value = "values", -`Goals For`, -`Goals Against`) %>% 
+  select(-contains("Goals"))
+
+waffle(
+  jp_aus, rows = 4, size = 1, 
+  title = glue("
+               Japan vs. Australia: 
+               The New 'Asian' Rivalry"),
+  colors = c("red", "grey", "blue"), 
+  use_glyph = "futbol", glyph_size = 5,
+  legend_pos = "bottom"
+)
+
+```
+
+
+
+```{r}
+pal <- c("Japan" = "blue", "Draw" = "grey", "South Korea" = "red")
+
+results_jp_asia %>% 
+  japan_versus(opponent == "Korea Republic") %>% 
+  select(-opponent, Japan = Win, `South Korea` = Loss) %>% 
+  gather(key = "team", value = "values", -`Goals For`, -`Goals Against`) %>% 
+  ggplot(aes(fill = team, values = values)) +
+  geom_waffle(color = "white", size = 1.125, n_rows = 6) +
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_y_discrete(expand = c(0, 0)) +
+  scale_fill_manual(values = pal, name = NULL) +
+  coord_equal() +
+  hrbrthemes::theme_ipsum_rc(grid="") +
+  theme_enhance_waffle() +
+  labs(title = "Japan vs. South Korea")
+
+```
+
+
+
+## time between start-finish + distance travelled
+
+bar plot + calendar plot

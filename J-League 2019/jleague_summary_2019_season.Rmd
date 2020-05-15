@@ -1,0 +1,293 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Packages
+
+```{r, message=FALSE, warning=FALSE}
+pacman::p_load(tidyverse, polite, scales, ggimage, ggforce,
+               understatr, cowplot, kableExtra, ggbeeswarm,
+               jsonlite, xml2, qdapRegex, stringi, stringr,
+               rvest, glue, extrafont, ggrepel, magick, ggtext)
+loadfonts(quiet = TRUE)
+```
+
+
+# Goal Contribution Plot
+
+## Scrape
+
+```{r}
+## webscrape soccerway
+
+url <- "https://us.soccerway.com/national/japan/j1-league/2019/regular-season/r51011/"
+
+session <- bow(url)
+
+team_links <- scrape(session) %>% 
+  html_nodes("#page_competition_1_block_competition_tables_7_block_competition_league_table_1_table .large-link a") %>% 
+  html_attr("href")
+
+team_links_df <- team_links %>% 
+  enframe(name = NULL) %>% 
+  separate(value, c(NA, NA, NA, "team_name", "team_num"), sep = "/") %>% 
+  mutate(link = glue("https://us.soccerway.com/teams/japan/{team_name}/{team_num}/squad/"))
+
+# for each team link:
+
+player_name_info <- function(session) {
+  
+  player_name_info <- scrape(session) %>% 
+    html_nodes("#page_team_1_block_team_squad_3-table .name.large-link") %>% 
+    html_text()
+}
+
+num_goals_info <- function(session) {
+
+  num_goals_info <- scrape(session) %>% 
+    html_nodes(".goals") %>% 
+    html_text()
+  
+  num_goals_info_clean <- num_goals_info[-1]
+}
+
+num_assists_info <- function(session) {
+
+  num_assists_info <- scrape(session) %>% 
+    html_nodes(".assists") %>% 
+    html_text()
+  
+  num_assists_info_clean <- num_assists_info[-1]
+}
+
+# BIG FUNCTION
+jleague_stats_info <- function(link) {
+  
+  session <- bow(link)
+  
+  player_name <- player_name_info(session = session)
+
+  num_goals <- num_goals_info(session = session)
+
+  num_assists <- num_assists_info(session = session)
+  
+  resultados <- list(player_name, num_goals, num_assists)
+  col_names <- c("name", "goals", "assists") 
+  
+  jleague_stats <- resultados %>% 
+    reduce(cbind) %>% 
+    as_tibble() %>% 
+    set_names(col_names)
+  
+}
+
+# ALL 18 TEAMS AT ONCE, WILL TAKE A WHILE:
+jleague_goal_contribution_df_ALL <- map2(.x = team_links_df$link, 
+                             .y = team_links_df$team_name,
+                             ~ jleague_stats_info(link = .x) %>% mutate(team = .y))
+
+jleague2019_goal_contribution_df <- jleague_goal_contribution_df_ALL %>% 
+  reduce(rbind)
+```
+
+```{r}
+saveRDS(jleague2019_goal_contribution_df, 
+        file = glue("{here::here()}/data/jleague2019_goal_contrib_raw_df.RDS"))
+```
+
+
+## clean
+
+```{r}
+jleague2019_goal_contribution_clean_df <- jleague2019_goal_contribution_df %>% 
+  mutate_at(.vars = c("goals", "assists"), 
+            ~str_replace(., "-", "0") %>% as.numeric) %>% 
+  mutate(team = team %>% str_replace_all(., "-", " ") %>% str_to_title) %>% 
+  group_by(team) %>% 
+  mutate(total_goals = sum(goals),
+         total_assists = sum(assists),
+         goal_contrib = goals/total_goals,
+         assist_contrib = assists/total_goals) %>% 
+  ungroup()
+```
+
+```{r}
+## save
+saveRDS(jleague2019_goal_contribution_clean_df, 
+        file = glue("{here::here()}/data/jleague_goal_contrib_clean_df.RDS"))
+
+jleague2019_goal_contribution_clean_df <- readRDS(
+  file = glue("{here::here()}/data/jleague_goal_contrib_clean_df.RDS"))
+```
+
+
+
+## plot
+
+
+
+```{r fig.width = 10, fig.height = 8}  
+jleague2019_goal_contribution_clean_df %>% 
+  ggplot(aes(assist_contrib, goal_contrib)) +
+  geom_point(data = jleague2019_goal_contribution_clean_df %>%
+                    filter(goal_contrib < 0.25 | assist_contrib < 0.15),
+             color = "grey20", size = 4, alpha = 0.2) +
+  geom_point(data = jleague2019_goal_contribution_clean_df %>%
+                    filter(goal_contrib > 0.25 | assist_contrib > 0.15),
+             color = "red", size = 4) +
+  geom_hline(yintercept = 0.25, color = "grey20", alpha = 0.4) +
+  geom_vline(xintercept = 0.15, color = "grey20", alpha = 0.4) +
+  # gghighlight::gghighlight(goal_contrib > 0.25 | assist_contrib > 0.15,
+  #                          label_key = name, 
+  #                          label_params = list(size = 3.5)) +
+  geom_text_repel(data = jleague2019_goal_contribution_clean_df %>%
+                    filter(goal_contrib > 0.25 | assist_contrib > 0.15),
+                  aes(label = name, family = "Roboto Condensed", fontface = "bold"), 
+                  seed = 7, size = 5, 
+                  min.segment.length = 0, segment.color = "red",
+                  point.padding = 0.5) +
+  scale_x_continuous(labels = percent_format(accuracy = 1), 
+                     breaks = c(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3),
+                     limits = c(0, 0.3)) +
+  scale_y_continuous(labels = percent_format(accuracy = 1), 
+                     breaks = c(0, 0.1, 0.2, 0.3, 0.4, 0.5),
+                     limits = c(0, 0.5)) +
+  labs(title = "Team Goal Involvement as Percentage of Total Club Goals",
+       subtitle = "J.League 2019 Season",
+       caption = glue("
+                      Data: transfermarkt.com
+                      By: @R_by_Ryo"),
+       x = "Percentage of Club Goals Assisted",
+       y = "Percentage of Club Goals Scored") +
+  theme_minimal() +
+  theme(text = element_text(family = "Roboto Condensed"),
+        title = element_text(size = 20),
+        plot.subtitle = element_text(size = 18),
+        plot.caption = element_text(size = 12),
+        axis.title = element_text(size = 15),
+        axis.text = element_text(size = 14),
+        panel.grid.minor.x = element_blank()) -> goal_contribution_matrix
+
+goal_contribution_matrix
+```
+
+
+
+```{r}
+
+```
+
+
+
+
+
+
+# age-utility graph
+
+
+```{r}
+url <- "https://www.transfermarkt.com/j1-league/startseite/wettbewerb/JAP1/plus/?saison_id=2018"
+
+session <- bow(url)
+
+team_links <- scrape(session) %>% 
+  html_nodes("#yw1 > table > tbody > tr > td.zentriert.no-border-rechts > a") %>% 
+  html_attr("href")
+
+team_links_df <- team_links %>% 
+  enframe(name = NULL) %>% 
+  separate(value, c(NA, "team_name", NA, NA, "team_num", NA, NA), sep = "/") %>% 
+  mutate(link = glue("https://www.transfermarkt.com/{team_name}/leistungsdaten/verein/{team_num}/reldata/JAP1%262018/plus/1"))
+```
+
+
+
+```{r}
+jleague_age_utility <- function(link) {
+  
+  session <- bow(link)
+  
+  result_name <- scrape(session) %>% 
+    html_nodes("#yw1 .bilderrahmen-fixed") %>% 
+    html_attr("title") 
+  
+  # grab age
+  result_age <- scrape(session) %>% 
+    html_nodes(".posrela+ .zentriert") %>% 
+    html_text()
+  
+  # grab minutes played in league
+  result_mins <- scrape(session) %>% 
+    html_nodes("td.rechts") %>% 
+    html_text()
+  
+  resultados <- list(result_name, result_age, result_mins)
+  
+  col_name <- c("name", "age", "minutes")
+  
+  # then reduce(cbind) to combine them, set names to cols 
+  results_comb <- resultados %>% 
+    reduce(cbind) %>% 
+    as_tibble() %>% 
+    set_names(col_name)
+}
+```
+
+
+
+```{r}
+jleague_age_utility_df_ALL <- map2(.x = team_links_df$link, 
+                             .y = team_links_df$team_name,
+                             ~ jleague_age_utility(link = .x) %>% mutate(team = .y))
+
+jleague_age_utility_df <- jleague_age_utility_df_ALL %>% 
+  reduce(rbind)
+```
+
+
+
+
+
+
+Points per Game
+
+- highlight FC Tokyo's loss of form during Rugby WC
+- higlihgt Diego Oliveira's goal drought
+
+Points per matchday plot
+
+
+
+# Shot data
+
+
+
+```{r}
+jleague_shot_df_raw <- read_csv(
+  file = here::here("data/jleague2019_shot_data.csv"))
+
+glimpse(jleague_shot_df_raw)
+```
+
+
+```{r}
+jleague_shot_df_clean <- jleague_shot_df_raw %>% 
+  separate(Player, into = c("Name", "extra"), sep = "\\\\") %>% 
+  select(-Matches, -Rk, -extra) %>% 
+  glimpse()
+```
+
+```{r}
+jleague_shot_df_clean %>% 
+  filter(`90s` >= 23.8) %>% 
+  ggplot(aes(x = `Sh/90`, y = `SoT/90`, size = Gls)) +
+  geom_point()
+```
+
+
+

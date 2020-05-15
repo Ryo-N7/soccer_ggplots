@@ -1,0 +1,11 @@
+
+
+"To look at it from a percentage perspective, we expected De Gea to save 73.2% of the shots he faced last season. He actually saved 82.4%, giving him an Adjusted Save Percentage of +9.2%."
+
+
+If DeGea was an average GK, then given the quality of the shots he faced, the model would expect him to save 73.2% of them. However, in reality he saved 82.4% which gives him a +9.2% GSAA%. This means he saved 9.2% more shots than the average goalkeeper was expected to save by the model.
+
+
+67.7% xSaves. Given the quality of shots faced, an average GK should save 67.7% of those shots.
+
+-10.8 GSAA %. Pavlenka has saved 10.8% less than what the post-shot model expected an average GK to save.

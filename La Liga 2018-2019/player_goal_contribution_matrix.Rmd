@@ -1,0 +1,290 @@
+---
+title: "La Liga"
+author: "RN7"
+date: "5/24/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# pkgs
+
+```{r, message=FALSE, warning=FALSE}
+pacman::p_load(tidyverse, polite, scales, ggimage, ggforce,
+               rvest, glue, extrafont, ggrepel, magick)
+loadfonts()
+```
+
+## add_logo
+
+```{r}
+add_logo <- function(plot_path, logo_path, logo_position, logo_scale = 10){
+
+    # Requires magick R Package https://github.com/ropensci/magick
+
+    # Useful error message for logo position
+    if (!logo_position %in% c("top right", "top left", "bottom right", "bottom left")) {
+        stop("Error Message: Uh oh! Logo Position not recognized\n  Try: logo_positon = 'top left', 'top right', 'bottom left', or 'bottom right'")
+    }
+
+    # read in raw images
+    plot <- magick::image_read(plot_path)
+    logo_raw <- magick::image_read(logo_path)
+
+    # get dimensions of plot for scaling
+    plot_height <- magick::image_info(plot)$height
+    plot_width <- magick::image_info(plot)$width
+
+    # default scale to 1/10th width of plot
+    # Can change with logo_scale
+    logo <- magick::image_scale(logo_raw, as.character(plot_width/logo_scale))
+
+    # Get width of logo
+    logo_width <- magick::image_info(logo)$width
+    logo_height <- magick::image_info(logo)$height
+
+    # Set position of logo
+    # Position starts at 0,0 at top left
+    # Using 0.01 for 1% - aesthetic padding
+
+    if (logo_position == "top right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "top left") {
+        x_pos = 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "bottom right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    } else if (logo_position == "bottom left") {
+        x_pos = 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    }
+
+    # Compose the actual overlay
+    magick::image_composite(plot, logo, offset = paste0("+", x_pos, "+", y_pos))
+}
+```
+
+
+# La Liga
+
+## webscrape soccerway
+
+```{r}
+url <- "https://us.soccerway.com/national/spain/primera-division/20182019/regular-season/r47983/"
+
+session <- bow(url)
+
+team_links <- scrape(session) %>% 
+  html_nodes("#page_competition_1_block_competition_tables_7_block_competition_league_table_1_table .large-link a") %>% 
+  html_attr("href")
+
+team_links_df <- team_links %>% 
+  enframe(name = NULL) %>% 
+  separate(value, c(NA, NA, NA, "team_name", "team_num"), sep = "/") %>% 
+  mutate(link = glue("
+                     https://us.soccerway.com/teams/spain/{team_name}/{team_num}/squad/"),
+         stat_link = glue("{link %>% str_replace('squad', 'statistics')}"))
+
+# for each team link:
+
+player_name_info <- function(session) {
+  
+  player_name_info <- scrape(session) %>% 
+    html_nodes("#page_team_1_block_team_squad_3-table .name.large-link") %>% 
+    html_text()
+}
+
+num_goals_info <- function(session) {
+
+  num_goals_info <- scrape(session) %>% 
+    html_nodes(".goals") %>% 
+    html_text()
+  
+  num_goals_info_clean <- num_goals_info[-1]
+}
+
+num_assists_info <- function(session) {
+
+  num_assists_info <- scrape(session) %>% 
+    html_nodes(".assists") %>% 
+    html_text()
+  
+  num_assists_info_clean <- num_assists_info[-1]
+}
+
+team_goals_info <- function(session) {
+  team_goals_info <- scrape(session) %>% 
+    html_nodes("tr.first:nth-child(6) > td:nth-child(2)") %>% 
+    html_text()
+}
+
+# BIG FUNCTION
+laliga_stats_info <- function(link, statlink) {
+  
+  session <- bow(link)
+  session2 <- bow(statlink)
+  
+  player_name <- player_name_info(session = session)
+
+  num_goals <- num_goals_info(session = session)
+
+  num_assists <- num_assists_info(session = session)
+  
+  team_goals <- team_goals_info(session = session2)
+  
+  resultados <- list(player_name, num_goals, num_assists, team_goals)
+  col_names <- c("name", "goals", "assists", "team_goals") 
+  
+  laliga_stats <- resultados %>% 
+    reduce(cbind) %>% 
+    as_tibble() %>% 
+    set_names(col_names)
+}
+```
+
+### all at once
+
+```{r}
+# ALL 18 TEAMS AT ONCE, WILL TAKE A WHILE:
+laliga_goal_contribution_df_ALL <- map2(.x = team_links_df$link,
+                .y = team_links_df$stat_link,
+                ~ laliga_stats_info(link = .x, statlink = .y))
+
+laliga_goal_contribution_df <- laliga_goal_contribution_df_ALL %>% 
+  set_names(team_links_df$team_name) %>% 
+  bind_rows(.id = "team_name")
+
+## save
+saveRDS(laliga_goal_contribution_df, file = glue("{here::here()}/data/laliga_goal_contrib_df_soccerway.RDS"))
+```
+
+## clean
+
+```{r}
+laliga_goal_contribution_clean_df <- laliga_goal_contribution_df %>% 
+  mutate_at(.vars = c("goals", "assists"), 
+            ~str_replace(., "-", "0") %>% as.numeric) %>% 
+  mutate(team = team_name %>% str_replace_all(., "-", " ") %>% str_to_title,
+         total_goals = as.numeric(team_goals)) %>% 
+  group_by(team) %>% 
+  mutate(total_assists = sum(assists),
+         goal_contrib = goals/total_goals,
+         ## as/tot_goals because looking at perspective of contrib to goals.
+         ## Will be an underestimation as not all goals have assists.
+         ## a.k.a. not looking at % of club assists assisted but % of club goals assisted
+         assist_contrib = assists/total_goals) %>% 
+  ungroup() %>% 
+  select(-team_name, -team_goals)
+
+## save
+saveRDS(laliga_goal_contribution_clean_df, 
+        file = glue("{here::here()}/data/laliga_goal_contrib_clean_df.RDS"))
+laliga_goal_contribution_clean_df <- readRDS(file = glue("{here::here()}/data/laliga_goal_contrib_clean_df.RDS"))
+```
+
+## plot
+
+- Aspas exceeds his xG (again) to save Celta Vigo from relegation (again)!
+-
+-
+
+```{r fig.width = 10, fig.height = 8}  
+## Description text
+## Iago Aspas
+desc_aspas <- "With 20 Goals from 12.47 xG, Iago Aspas greatly exceeded his xG as he heroically saved Celta Vigo from relegation yet again!"
+
+## Jony   xA90 of 0.29 (tied 3rd highest, minimum 30 games)
+desc_jony <- "With 10 assists amounting to 34% of Alavés' xA, Jony had his career-best season as he helped Alavés contend for a European place."
+
+## Messi
+desc_goat <- "With total contribution nearly double of the next best, 36 Goals from a xG of 26, etc. Messi led almost every metric in La Liga this season!"
+
+## PLOT!
+laliga_goal_contribution_clean_df %>% 
+  ggplot(aes(assist_contrib, goal_contrib)) +
+  geom_point(data = laliga_goal_contribution_clean_df %>%
+                    filter(goal_contrib < 0.225 | assist_contrib < 0.125),
+             color = "grey20", size = 4, alpha = 0.2) +
+  geom_point(data = laliga_goal_contribution_clean_df %>%
+                    filter(goal_contrib > 0.225 | assist_contrib > 0.125),
+             color = "red", size = 4) +
+  geom_hline(yintercept = 0.225, color = "grey20", alpha = 0.4) +
+  geom_vline(xintercept = 0.125, color = "grey20", alpha = 0.4) +
+  geom_text_repel(data = laliga_goal_contribution_clean_df %>%
+                    filter(goal_contrib > 0.225 | assist_contrib > 0.125,
+                           !name %in% c("Iago Aspas", "L. Messi", 
+                                        "Jony", "Pablo Sarabia")),
+                  aes(label = name, family = "Roboto Condensed", fontface = "bold"), 
+                  seed = 15, size = 4, 
+                  min.segment.length = 0, segment.color = "red",
+                  point.padding = 0.5) +
+  geom_text(data = laliga_goal_contribution_clean_df %>%
+              filter(name == "Pablo Sarabia"),
+            aes(label = name, family = "Roboto Condensed", fontface = "bold"),
+            size = 4,
+            nudge_x = -0.02, nudge_y = 0) +
+  geom_mark_circle(aes(filter = name == "L. Messi", 
+                       label = "Lionel Messi: GOAT",
+                        description = desc_goat),
+                    label.family = "Roboto Condensed", label.fontsize = c(16, 12)) +
+  geom_mark_circle(aes(filter = name == "Iago Aspas", 
+                     label = "Iago Aspas: The Hero of Vigo",
+                        description = desc_aspas),
+                    label.buffer = unit(10, "mm"), label.fontsize = c(16, 12),
+                    label.family = "Roboto Condensed") +
+  geom_mark_circle(aes(filter = name == "Jony", 
+                       label = "Jony: El Glorioso", 
+                       description = desc_jony),
+                   label.buffer = unit(5, "mm"), label.fontsize = c(16, 12),
+                   label.family = "Roboto Condensed") +
+  scale_x_continuous(labels = percent_format(accuracy = 1),
+                     breaks = c(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3),
+                     limits = c(0, 0.33)) +
+  scale_y_continuous(labels = percent_format(accuracy = 1),
+                     breaks = c(0, 0.1, 0.2, 0.3, 0.4, 0.5),
+                     limits = c(0, 0.55)) +
+  labs(title = "Goal Contribution Graph: La Liga (2018-2019 Season)",
+       subtitle = "Goal Involvement (Goals and/or Assists) as Percentage of Total Club Goals",
+       caption = glue("
+                      Data: soccerway.com & understat.com
+                      By: @R_by_Ryo"),
+       x = "Percentage of Club Goals Assisted",
+       y = "Percentage of Club Goals Scored") +
+  theme_minimal() +
+  theme(text = element_text(family = "Roboto Condensed"),
+        title = element_text(size = 20),
+        plot.subtitle = element_text(size = 16),
+        plot.caption = element_text(size = 10),
+        axis.title = element_text(size = 14),
+        axis.text = element_text(size = 12),
+        panel.grid.minor.x = element_blank()) -> laliga_goal_contribution_matrix
+
+laliga_goal_contribution_matrix
+```
+
+## save
+
+```{r}
+ggsave(plot = laliga_goal_contribution_matrix, 
+       "../La Liga 2018-2019/output/goal_contribution_matrix_plot_laliga.png",
+       height = 8, width = 10)
+```
+
+```{r}
+plot_logo <- add_logo(
+  plot_path = "../La Liga 2018-2019/output/goal_contribution_matrix_plot_laliga.png",
+  logo_path = "https://i.imgur.com/hBltz33.png",
+  logo_position = "top right",
+  logo_scale = 6)
+
+plot_logo
+```
+
+```{r}
+image_write(image = plot_logo, 
+            "../La Liga 2018-2019/output/goal_contribution_matrix_plot_logo_laliga.png")
+```

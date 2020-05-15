@@ -1,0 +1,218 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "August 12, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+library(ggsoccer)
+library(gganimate)
+library(ggplot2)
+library(dplyr)
+library(scales)
+library(ggimage)
+```
+
+
+```{r}
+empty_dat <- data.frame(x = 1, y = 1)
+
+data_df <- data.frame(
+  
+  time = c(1, 2, 3, 4, 5, 6, 7, 8),
+  
+  x = c(62.5,  66.5,   70.5,   73.5,   75.5, 92.5, 95.5, 101),
+  y = c(  70,    67,     60,     57,     43,   29, 54,   54),
+  
+  lab1 = "#8",
+  x1 = c(61.5, 65.5, 69.5, 72.5, 74.4, 77.5, 84.5, 87.5),
+  y1 = c(70,     67,   60,   57,   43,   40, 45, 45),
+  
+  lab2 = "#3",
+  x2 = c(61.5, 70.5, 75.5, 81.5, 83.5, 90.5, 90.5, 90.5),
+  y2 = c(17,     18,   19,   20,   23,   27,   27, 30),
+  
+  lab3 = "#11",
+  x3 = c(67, 79, 81, 83.4, 85, 88, 94, 95),
+  y3 = c(85, 79, 70, 65,   58, 54, 54, 54),
+  
+  lab4 = "#10",
+  x4 = c(72, 77, 78, 80, 83.5, 85, 87, 87),
+  y4 = c(38, 43, 45, 47, 47, 47, 47,   47)
+  
+)
+
+ggplot(data_df, aes(x = x, y = y)) +
+  annotate_pitch() +
+  theme_pitch() +
+  coord_flip(xlim = c(60, 105),
+             ylim = c(-1, 101)) +
+  geom_label(aes(x = x1, y = y1, label = lab1)) +
+  geom_label(aes(x = x2, y = y2, label = lab2)) +
+  geom_label(aes(x = x3, y = y3, label = lab3)) +
+  geom_label(aes(x = x4, y = y4, label = lab4)) +
+  ggimage::geom_emoji(
+    aes(x = x, y = y),
+    image = "26bd", size = 0.035) + 
+  transition_states(states = time, 
+                    transition_length = 0.25, state_length = 0.001, 
+                    wrap = FALSE) +
+  ease_aes("linear")
+  
+```
+
+
+
+```{r}  
+ggplot(data_df, aes(x = x, y = y)) +
+  annotate_pitch() +
+  theme_pitch() +
+  coord_flip(xlim = c(60, 105),
+             ylim = c(-1, 101)) +
+  geom_point(aes(x = 72, y = 38)) +
+  geom_point(aes(x = 77, y = 43)) +
+  geom_point(aes(x = 78, y = 45)) +
+  geom_point(aes(x = 80, y = 48)) +
+  geom_point(aes(x = 85.5, y = 48)) +
+  geom_point(aes(x = 87, y = 48)) +
+  # robbo
+  geom_point(aes(x = 61.5, y = 17), color = "red") +
+  geom_point(aes(x = 68.5, y = 18), color = "red") +
+  geom_point(aes(x = 74.5, y = 19), color = "red") +
+  geom_point(aes(x = 81.5, y = 20), color = "red") +
+  geom_point(aes(x = 90.5, y = 27), color = "red") +
+  geom_point() +
+  geom_point() +
+  geom_point()
+
+
+```
+
+
+
+
+
+
+```{r}
+
+ball_data <- data.frame(
+  
+  # SHOW Trent's beautiful through-pass?
+  
+  # 1: forward run (slight diagonal left)   center toward penalty box arc
+  
+  # 2: touch out wide left
+  
+  # 3: drift left 
+  
+  # 4. >>> PASS       (how to code in the slight pause?)
+  
+  # 5: Robbo first time cross in
+  
+  # 6: Mo tap-in
+  
+)
+
+
+lfc_players <- data.frame(
+  
+  # Trent
+  lx1,
+  ly1,
+  
+  # Naby
+  lx2,
+  ly2,
+  
+  # Robbo
+  lx3,
+  ly3,
+  
+  # Mo
+  lx4,
+  ly4,
+  
+  # Sadio
+  lx5,
+  ly5,
+  
+  # Hamez
+  lx6,
+  ly6,
+  
+  # Bobby
+  lx7,
+  ly7,
+  
+  
+
+)
+
+whfc_players <- data.frame(
+  
+  # Rice
+  wx1,
+  wy1,
+  # Noble
+  wx2,
+  wy2,
+  
+  # Fredericks
+  wx3,
+  wy3,
+  
+  # Ogbonna
+  wx4,
+  wy4,
+  
+  # Balbuena
+  wx5,
+  wy5,
+  
+  # Masuaku
+  wx6,
+  wy6,
+  
+  # Fabianski
+  wx7,
+  wy7
+)
+
+
+```
+
+
+
+
+
+
+
+```{r}
+ggplot(empty_dat, aes(x = x, y = y)) +
+  annotate_pitch() +
+  theme_pitch() +
+  coord_flip(
+    xlim = c(40, 112),
+    ylim = c(-1, 101)) 
+
+
+ggplot(empty_dat, aes(x = x, y = y)) +
+  annotate_pitch() +
+  theme_pitch() +
+  coord_cartesian(
+    xlim = c(50, 105),
+    ylim = c(-1, 101)) 
+
+```
+
+
+
+
+

@@ -1,0 +1,33 @@
+,,,,,,Goals,Goals,Goals,Goals,Goals,Expected,Expected,Expected,Expected,Launched,Launched,Launched,Passes,Passes,Passes,Passes,Goal Kicks,Goal Kicks,Goal Kicks,Crosses,Crosses,Crosses,Sweeper,Sweeper,Sweeper,
+Rk,Player,Nation,Pos,Squad,90s,GA,PKA,FK,CK,OG,PSxG,PSxG/SoT,PSxG+/-,/90,Cmp,Att,Cmp%,Att,Thr,Launch%,AvgLen,Att,Launch%,AvgLen,Att,Stp,Stp%,#OPA,#OPA/90,AvgDist,Matches
+1,Oliver Baumann\Oliver-Baumann,de GER,GK,Hoffenheim,17.0,28,2,0,2,1,22.6,0.29,-4.4,-0.26,113,279,40.5,657,103,33.5,33.3,158,37.3,35.8,126,6,4.8,20,1.18,15.7,Matches
+2,Roman Bürki\Roman-Burki,ch SUI,GK,Dortmund,13.8,23,0,0,5,3,15.9,0.38,-4.1,-0.30,52,148,35.1,383,70,29.5,32.4,104,33.7,33.7,74,1,1.4,18,1.31,17.1,Matches
+3,Koen Casteels\Koen-Casteels,be BEL,GK,Wolfsburg,9.0,10,1,1,1,0,10.6,0.29,+0.6,+0.07,81,183,44.3,276,43,53.3,42.2,68,52.9,44.7,74,7,9.5,5,0.56,13.8,Matches
+4,Mark Flekken\Mark-Flekken,nl NED,GK,Freiburg,9.0,14,0,0,1,0,15.7,0.25,+1.7,+0.19,73,190,38.4,289,38,45.0,40.6,95,63.2,54.7,51,3,5.9,2,0.22,12.4,Matches
+5,Rafał Gikiewicz\Rafal-Gikiewicz,pl POL,GK,Union Berlin,17.0,24,1,0,2,0,26.5,0.31,+2.5,+0.15,229,451,50.8,587,62,59.5,46.4,141,72.3,55.9,91,7,7.7,10,0.59,15.2,Matches
+6,Péter Gulácsi\Peter-Gulacsi,hu HUN,GK,RB Leipzig,16.0,18,1,0,4,0,19.3,0.35,+1.3,+0.08,62,178,34.8,478,89,28.9,32.7,102,39.2,36.9,81,7,8.6,22,1.38,15.9,Matches
+7,Marwin Hitz\Marwin-Hitz,ch SUI,GK,Dortmund,3.2,1,0,0,0,0,2.7,0.38,+1.7,+0.51,9,24,37.5,75,14,20.0,31.0,25,36.0,39.9,17,2,11.8,4,1.25,17.5,Matches
+8,Timo Horn\Timo-Horn,de GER,GK,Köln,17.0,32,4,1,6,1,22.5,0.35,-8.5,-0.50,142,293,48.5,376,49,56.6,44.2,155,51.6,42.0,99,7,7.1,6,0.35,13.6,Matches
+9,Lukáš Hrádecký\Lukas-Hradecky,fi FIN,GK,Bayer,17.0,21,1,0,3,0,22.3,0.36,+1.3,+0.07,134,308,43.5,631,108,40.7,37.1,121,42.1,38.7,75,8,10.7,15,0.88,14.9,Matches
+10,Jannik Huth\Jannik-Huth,de GER,GK,Paderborn 07,6.0,17,1,0,1,0,13.5,0.42,-3.5,-0.58,34,83,41.0,205,37,33.7,34.0,49,28.6,33.4,31,4,12.9,4,0.67,15.9,Matches
+11,Rune Jarstein\Rune-Jarstein,no NOR,GK,Hertha BSC,14.3,23,5,1,3,2,21.8,0.32,+0.8,+0.06,154,306,50.3,385,57,55.6,41.9,109,84.4,57.5,84,8,9.5,7,0.49,13.1,Matches
+12,Tomáš Koubek\Tomas-Koubek,cz CZE,GK,Augsburg,17.0,31,0,0,2,2,26.0,0.34,-3.0,-0.17,122,351,34.8,427,66,54.3,45.5,159,74.8,58.3,134,8,6.0,19,1.12,16.1,Matches
+13,Thomas Kraft\Thomas-Kraft,de GER,GK,Hertha BSC,2.0,4,0,0,2,0,4.2,0.35,+0.2,+0.11,25,48,52.1,50,11,60.0,42.1,21,85.7,58.7,18,1,5.6,2,1.00,18.3,Matches
+14,Florian Müller\Florian-Muller,de GER,GK,Mainz 05,3.0,12,1,1,2,0,7.4,0.33,-4.6,-1.55,27,54,50.0,66,14,51.5,42.0,31,64.5,51.8,26,1,3.8,5,1.67,16.2,Matches
+15,Yvon Mvogo\Yvon-Mvogo,ch SUI,GK,RB Leipzig,1.0,2,0,0,0,0,1.3,0.33,-0.7,-0.70,4,13,30.8,39,5,28.2,32.2,6,33.3,34.5,5,0,0.0,2,2.00,17.0,Matches
+16,Manuel Neuer\Manuel-Neuer,de GER,GK,Bayern Munich,17.0,22,3,0,3,0,19.5,0.29,-2.5,-0.15,101,160,63.1,658,112,21.4,28.9,84,22.6,29.1,63,4,6.3,20,1.18,18.4,Matches
+17,Alexander Nübel\Alexander-Nubel,de GER,GK,Schalke 04,14.7,18,4,1,2,0,20.0,0.34,+2.0,+0.14,94,260,36.2,464,64,39.9,38.9,115,65.2,49.2,86,6,7.0,12,0.82,15.1,Matches
+18,Jiří Pavlenka\Jiri-Pavlenka,cz CZE,GK,Werder Bremen,17.0,41,1,1,7,2,30.7,0.33,-8.3,-0.49,129,309,41.7,468,71,47.2,40.1,166,53.0,43.2,131,6,4.6,10,0.59,13.9,Matches
+19,Pavao Pervan\Pavao-Pervan,at AUT,GK,Wolfsburg,8.0,8,1,0,0,0,9.4,0.26,+1.4,+0.18,54,134,40.3,205,38,49.3,39.9,62,53.2,46.2,46,2,4.3,6,0.75,15.0,Matches
+20,Frederik Rønnow\Frederik-Ronnow,dk DEN,GK,Eint Frankfurt,8.0,13,1,0,0,0,12.8,0.29,-0.2,-0.02,75,164,45.7,230,33,55.2,41.6,59,62.7,47.7,44,4,9.1,4,0.50,14.0,Matches
+21,Markus Schubert\Markus-Schubert,de GER,GK,Schalke 04,2.2,3,2,0,1,0,5.8,0.41,+2.8,+1.27,23,63,36.5,79,10,53.2,42.9,25,84.0,57.8,29,3,10.3,2,0.90,11.6,Matches
+22,Alexander Schwolow\Alexander-Schwolow,de GER,GK,Freiburg,7.2,8,0,0,2,0,5.7,0.21,-2.3,-0.31,43,143,30.1,214,35,43.9,40.3,74,66.2,56.2,33,3,9.1,5,0.69,13.1,Matches
+23,Dennis Smarsch\Dennis-Smarsch,de GER,GK,Hertha BSC,0.7,2,0,0,0,0,0.6,0.22,-1.4,-2.03,9,20,45.0,25,2,52.0,41.2,8,87.5,55.3,5,1,20.0,2,3.00,17.0,Matches
+24,Yann Sommer\Yann-Sommer,ch SUI,GK,M'gladbach,17.0,18,0,1,2,0,24.4,0.34,+6.4,+0.38,121,256,47.3,611,84,31.1,33.7,157,42.0,38.1,99,5,5.1,14,0.82,14.0,Matches
+25,Zack Steffen\Zack-Steffen,us USA,GK,Düsseldorf,17.0,36,1,1,6,1,33.6,0.36,-1.4,-0.08,156,327,47.7,477,101,48.6,41.8,143,66.4,55.3,96,8,8.3,11,0.65,13.6,Matches
+26,Niclas Thiede\Niclas-Thiede,de GER,GK,Freiburg,0.8,1,0,0,0,0,1.1,0.27,+0.1,+0.10,1,9,11.1,34,11,26.5,32.1,7,0.0,20.4,8,1,12.5,1,1.32,14.9,Matches
+27,Kevin Trapp\Kevin-Trapp,de GER,GK,Eint Frankfurt,6.0,8,0,0,1,0,7.6,0.29,-0.4,-0.07,41,102,40.2,183,17,46.4,38.7,33,51.5,45.2,26,3,11.5,6,1.00,16.3,Matches
+28,Sven Ulreich\Sven-Ulreich,de GER,GK,Bayern Munich,0.0,0,0,,,,,,,,,,,,,,,,,,,,,,,,Matches
+29,Felix Wiedwald\Felix-Wiedwald,de GER,GK,Eint Frankfurt,3.0,8,0,0,2,0,6.8,0.32,-1.2,-0.40,26,52,50.0,79,14,49.4,38.0,24,54.2,41.8,17,1,5.9,3,1.00,16.1,Matches
+30,Robin Zentner\Robin-Zentner,de GER,GK,Mainz 05,14.0,27,1,0,5,1,26.6,0.33,+0.6,+0.04,91,262,34.7,392,91,45.7,39.5,131,63.4,51.9,98,10,10.2,10,0.71,17.8,Matches
+31,Leopold Zingerle\Leopold-Zingerle,de GER,GK,Paderborn 07,11.0,19,2,2,3,0,19.8,0.36,+0.8,+0.07,70,141,49.6,420,73,26.9,30.7,99,28.3,31.1,76,3,3.9,5,0.45,13.1,Matches

@@ -1,0 +1,217 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "February 1, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r message=FALSE}
+pacman::p_load(tidyverse, scales, lubridate, ggrepel, stringi, magick, 
+               glue, extrafont, rvest, ggtextures, cowplot, ggimage, polite)
+```
+
+```{r}
+federation_files <- Sys.glob("../data/federation_affiliations/*")
+
+df_federations = data.frame(country = NULL, federation = NULL)
+for (f in federation_files) {
+    federation = basename(f)
+    content = read.csv(f, header=FALSE)
+    content <- cbind(content,federation=rep(federation, dim(content)[1]))
+    df_federations <- rbind(df_federations, content)
+}
+
+colnames(df_federations) <- c("country", "federation")
+
+df_federations <- df_federations %>% 
+  mutate(country = as.character(country) %>% str_trim(side = "both"))
+```
+
+Now to load the results data and then join it with the affiliations data.
+
+```{r, message=FALSE}
+results_raw <- read_csv("../data/results.csv")
+
+results_japan_raw <- results_raw %>% 
+  filter(home_team == "Japan" | away_team == "Japan") %>% 
+  rename(venue_country = country, 
+         venue_city = city) %>% 
+  mutate(match_num = row_number())
+
+# combine with federation affiliations
+results_japan_home <- results_japan_raw %>% 
+  left_join(df_federations, 
+            by = c("home_team" = "country")) %>% 
+  mutate(federation = as.character(federation)) %>% 
+  rename(home_federation = federation) 
+
+results_japan_away <- results_japan_raw %>% 
+  left_join(df_federations, 
+            by = c("away_team" = "country")) %>% 
+  mutate(federation = as.character(federation)) %>% 
+  rename(away_federation = federation)
+
+# combine home-away
+results_japan_cleaned <- results_japan_home %>% 
+  full_join(results_japan_away)
+```
+
+Next I need to edit some of the continents for teams that didn't have a match in the federation affiliation data set, for example, "South Korea" is "Korea Republic" in the Kaggle data set.
+
+```{r}
+results_japan_cleaned <- results_japan_cleaned %>% 
+  mutate(
+    home_federation = case_when(
+      home_team %in% c(
+        "China", "Manchukuo", "Burma", "Korea Republic", "Vietnam Republic",
+        "Korea DPR", "Brunei") ~ "AFC",
+      home_team == "USA" ~ "Concacaf",
+      home_team == "Bosnia-Herzegovina" ~ "UEFA",
+      TRUE ~ home_federation),
+    away_federation = case_when(
+      away_team %in% c(
+        "China", "Manchukuo", "Burma", "Korea Republic", "Vietnam Republic",
+        "Korea DPR", "Brunei", "Taiwan") ~ "AFC",
+      away_team == "USA" ~ "Concacaf",
+      away_team == "Bosnia-Herzegovina" ~ "UEFA",
+      TRUE ~ away_federation
+    ))
+```
+
+Now that it's nice and cleaned up I can reshape it so that the data is set from Japan's perspective.
+
+```{r}
+results_jp_asia <- results_japan_cleaned %>% 
+  # filter only for Japan games and AFC opponents
+  filter(home_team == "Japan" | away_team == "Japan",
+         home_federation == "AFC" & away_federation == "AFC") %>% 
+  select(-contains("federation"), -contains("venue"),
+         -neutral, -match_num,
+         date, home_team, home_score, away_team, away_score, tournament) %>% 
+  # reshape columns to Japan vs. opponent
+  mutate(
+    opponent = case_when(
+      away_team != "Japan" ~ away_team,
+      home_team != "Japan" ~ home_team),
+    home_away = case_when(
+      home_team == "Japan" ~ "home",
+      away_team == "Japan" ~ "away"),
+    japan_goals = case_when(
+      home_team == "Japan" ~ home_score,
+      away_team == "Japan" ~ away_score),
+    opp_goals = case_when(
+      home_team != "Japan" ~ home_score,
+      away_team != "Japan" ~ away_score)) %>% 
+  # label results from Japan's perspective
+  mutate(
+    result = case_when(
+      japan_goals > opp_goals ~ "Win",
+      japan_goals < opp_goals ~ "Loss",
+      japan_goals == opp_goals ~ "Draw"),
+    result = result %>% as_factor() %>% fct_relevel(c("Win", "Draw", "Loss"))) %>% 
+  select(-contains("score"), -contains("team"))
+```
+
+
+```{r}
+results_jp_asia %>% filter(opponent == "Qatar") %>% knitr::kable()
+```
+
+
+```{r}
+japan_versus <- function(data, ...) {
+  # filter 
+  filter_vars <- enquos(...)
+  
+  jp_vs <- data %>% 
+    filter(!!!filter_vars) %>% 
+    # count results type per opponent
+    group_by(result, opponent) %>% 
+    mutate(n = n()) %>% 
+    ungroup() %>% 
+    # sum amount of goals by Japan and opponent
+    group_by(result, opponent) %>% 
+    summarize(j_g = sum(japan_goals),
+              o_g = sum(opp_goals),
+              n = n()) %>% 
+    ungroup() %>% 
+    # spread results over multiple columns
+    spread(result, n) %>% 
+    # 1. failsafe against no type of result against an opponent
+    # 2. sum up counts per opponent
+    group_by(opponent) %>% 
+    mutate(Win = if("Win" %in% names(.)){return(Win)} else{return(0)},
+         Draw = if("Draw" %in% names(.)){return(Draw)} else{return(0)},
+         Loss = if("Loss" %in% names(.)){return(Loss)} else{return(0)}) %>% 
+    summarize(Win = sum(Win, na.rm = TRUE),
+              Draw = sum(Draw, na.rm = TRUE),
+              Loss = sum(Loss, na.rm = TRUE),
+              `Goals For` = sum(j_g),
+              `Goals Against` = sum(o_g))
+  
+  return(jp_vs)
+}
+```
+
+
+
+```{r}
+results_jp_asia %>% 
+  japan_versus(opponent == "Qatar") %>% 
+  knitr::kable(format = "html",
+               caption = "Japan's Record vs. Qatar") %>% 
+  kableExtra::kable_styling(full_width = FALSE) %>% 
+  kableExtra::add_header_above(c(" ", "Result" = 3, "Goals" = 2))
+```
+
+```{r}
+results_jp_asia %>% 
+  japan_versus(opponent == "Iran") %>% 
+  knitr::kable(format = "html",
+               caption = "Japan's Record vs. Iran") %>% 
+  kableExtra::kable_styling(full_width = FALSE) %>% 
+  kableExtra::add_header_above(c(" ", "Result" = 3, "Goals" = 2))
+```
+
+
+
+
+
+```{r}
+library(ggsoccer)
+library(SBpitch)
+
+create_Pitch(grass_colour = "#538032", 
+line_colour =  "#ffffff", 
+background_colour = "#538032", 
+goal_colour = "#000000")
+
+
+dat <- data.frame(x = c(92, 80, 80, 80, 80, 
+                        70, 70, 62,
+                        65, 65,
+                        55),
+                   y = c(50, 10, 40, 65, 90, 
+                         40, 60, 50,
+                         10, 90,
+                         50),
+                  lab = c("Gonda", "Sakai", "Yoshida", "Tomiyasu", "Nagatomo",
+                          "Shiotani", "Shibasaki", "Minamino",
+                          "Haraguchi", "Doan",
+                          "Osako"))
+dat %>%
+  ggplot(aes(x = x, y = y)) +
+  annotate_pitch(fill = "#538032", 
+                 colour = "white") +
+  geom_label(aes(label = lab)) +
+  theme_pitch() +
+  coord_flip(xlim = c(49, 101),
+             ylim = c(-1, 101))
+```
+

@@ -1,0 +1,814 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "March 9, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# MAIN QUESTIONS
+- is squad reaching its peak years?
+- how much youth is used by teams?
+- changes/trends over seasons? overall transfer strategies? (highlight NEW players on plot?)
+
+
+# R related problems
+
+- how to scale up?
+-- instead of copy-paste same code, can use purrr BUT each team needs some manual fixing of names and other small little edits ...
+- create function that only needs new team {name}, and insert {primay color} and {secondary color}
+-- this can be easily done... 
+- introduce semi-transparent grey lines at 50% and Age == 25??
+
+# Packages
+```{r, message=FALSE, warning=FALSE}
+pacman::p_load(tidyverse, polite, scales, ggimage, rvest, 
+               glue, extrafont, ggrepel, magick, ggforce)
+loadfonts()
+```
+
+# functions
+
+## add_logo functions
+
+```{r}
+add_logo <- function(plot_path, logo_path, logo_position, logo_scale = 10){
+
+    # Requires magick R Package https://github.com/ropensci/magick
+
+    # Useful error message for logo position
+    if (!logo_position %in% c("top right", "top left", "bottom right", "bottom left")) {
+        stop("Error Message: Uh oh! Logo Position not recognized\n  Try: logo_positon = 'top left', 'top right', 'bottom left', or 'bottom right'")
+    }
+
+    # read in raw images
+    plot <- magick::image_read(plot_path)
+    logo_raw <- magick::image_read(logo_path)
+
+    # get dimensions of plot for scaling
+    plot_height <- magick::image_info(plot)$height
+    plot_width <- magick::image_info(plot)$width
+
+    # default scale to 1/10th width of plot
+    # Can change with logo_scale
+    logo <- magick::image_scale(logo_raw, as.character(plot_width/logo_scale))
+
+    # Get width of logo
+    logo_width <- magick::image_info(logo)$width
+    logo_height <- magick::image_info(logo)$height
+
+    # Set position of logo
+    # Position starts at 0,0 at top left
+    # Using 0.01 for 1% - aesthetic padding
+
+    if (logo_position == "top right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "top left") {
+        x_pos = 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "bottom right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    } else if (logo_position == "bottom left") {
+        x_pos = 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    }
+
+    # Compose the actual overlay
+    magick::image_composite(plot, logo, offset = paste0("+", x_pos, "+", y_pos))
+
+}
+```
+
+## tategaki function
+
+```{r}
+tategaki <- function(x){
+  x <- chartr("ー", "丨", x) # 長音符の処理
+  x <- strsplit(split="", x)
+  sapply(x, paste, collapse="\n")
+}
+
+tategaki_alt <- function(x){
+  x <- stringr::str_replace_all(x, "ー", "丨") # 長音符の処理
+  stringr::str_wrap(x, width = 1)
+}
+```
+
+
+# Vissel Kobe
+
+## scrape
+```{r}
+session <- bow("https://www.transfermarkt.com/vissel-kobe/leistungsdaten/verein/3958/plus/0?reldata=JAP1%262017")
+
+print(session)
+# "The path is scrapable for this user-agent": OK, looks like we are good to go!
+
+# scraping tranfermarkt is a nightmare...
+# scrape each col individually then combine later...
+
+# grab name from photo element instead
+result_name <- scrape(session) %>% 
+  html_nodes("#yw1 .bilderrahmen-fixed") %>% 
+  html_attr("title") 
+
+# grab age
+result_age <- scrape(session) %>% 
+  html_nodes(".posrela+ .zentriert") %>% 
+  html_text()
+
+# grab minutes played in league
+result_mins <- scrape(session) %>% 
+  html_nodes("td.rechts") %>% 
+  html_text()
+```
+
+## clean
+
+```{r}
+# place each vector into list
+
+resultados <- list(result_name, result_age, result_mins)
+
+col_name <- c("name", "age", "minutes")
+
+# then reduce(cbind) to combine them, set names to cols 
+resultados %>% 
+  reduce(cbind) %>% 
+  as_tibble() %>% 
+  set_names(col_name) -> results_comb
+
+# NOICE.gif
+glimpse(results_comb)
+
+# fix "strings" into proper formats, calculate % of minutes appeared
+kobe_minutes <- results_comb %>% 
+  
+  mutate(age = as.numeric(age),
+         minutes = minutes %>% 
+           str_replace("\\.", "") %>% 
+           str_replace("'", "") %>% 
+           as.numeric(),
+         min_perc = (minutes / 3060) %>% round(digits = 3)) %>% 
+  
+  filter(!is.na(minutes)) %>% 
+  
+  separate(name, into = c("first_name", "last_name"), by = " ") %>%
+  # manually fix somes names
+  mutate(last_name = case_when(
+    first_name == "Wellington" ~ "Wellington", 
+    first_name == "Seung" ~ "S.G. Kim",
+    first_name == "Leandro" ~ "Leandro",
+    first_name == "Woo" ~ "W.Y. Jung",
+    TRUE ~ last_name
+  )) %>% 
+  
+  arrange(desc(min_perc))
+
+# rectanglular highlight for players in their prime:
+rect_df <- data.frame(
+  xmin = 26, xmax = 31,
+  ymin = -Inf, ymax = Inf
+)
+
+glimpse(kobe_minutes)
+```
+
+
+
+## plot
+
+```{r fig.height=6, fig.width=8}
+kobe_minutes %>% 
+  ggplot(aes(x = age, y = min_perc)) +
+  geom_vline(xintercept = 25, alpha = 0.4, color = "grey20") +
+  geom_hline(yintercept = 0.5, alpha = 0.4, color = "grey20") +
+  geom_mark_rect(aes(filter = age >= 26 & age <= 31), 
+                 description = "ピーク年齢*", con.cap = 0,
+                 color = NA,　fill = "firebrick1", alpha = 0.5) + 
+  #geom_point(color = "firebrick1", size = 2.5) +
+  geom_point(color = "darkred", size = 2.5) +
+  geom_text_repel(
+    aes(label = last_name, family = "Roboto Condensed"),
+    nudge_x = 0.5,
+    seed = 6) + 
+  scale_y_continuous(
+    expand = c(0.01, 0),
+    limits = c(0, 1), 
+    labels = percent_format()) +
+  scale_x_continuous(
+    breaks = pretty_breaks(n = 10)) +
+  labs(
+    x = "年齢", 
+    y = tategaki_alt("出場時間（％）"),  
+    title = "ヴィッセル神戸: 年齢-出場時間プロット",
+    subtitle = "J-League 2018 Season (100% = 3060分)",
+    caption = glue("
+                   データ: transfermarkt.com
+                   *主観
+                   作: @R_by_Ryo"))  +
+  theme_bw() +
+  theme(
+    text = element_text(family = "Roboto Condensed"),
+    plot.title = element_text(color = "darkred", size = 16, face = "bold"),
+    plot.subtitle = element_text(size = 14),
+    axis.title.y = element_text(angle = 0, vjust= 0.5),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    panel.border = element_rect(color = "darkred", size = 1.25)) -> kobe_plot
+```
+
+```{r}
+ggsave(plot = kobe_plot, "../J-League 2018/output/kobe_plot.png",
+       height = 6, width = 8)
+```
+
+
+
+```{r}
+plot_logo <- add_logo(plot_path = "../J-League 2018/output/kobe_plot.png",
+                      logo_path = "https://upload.wikimedia.org/wikipedia/en/8/87/VisselKobe.png",
+                      logo_position = "top right",
+                      logo_scale = 20)
+
+plot_logo
+```
+
+```{r}
+image_write(image = plot_logo, "../J-League 2018/output/kobe_logo_plot.png")
+```
+
+### english version
+
+```{r fig.height=6, fig.width=8}
+kobe_minutes %>% 
+  ggplot(aes(x = age, y = min_perc)) +
+  geom_vline(xintercept = 25, alpha = 0.4, color = "grey20") +
+  geom_hline(yintercept = 0.5, alpha = 0.4, color = "grey20") +
+  geom_mark_rect(aes(filter = age >= 26 & age <= 31), 
+                 description = "Prime Age*", con.cap = 0,
+                 color = NA,　fill = "firebrick1", alpha = 0.5) + 
+  geom_point(color = "darkred", size = 2.5) +
+  geom_text_repel(
+    aes(label = last_name, family = "Roboto Condensed"),
+    nudge_x = 0.5,
+    seed = 6) + 
+  scale_y_continuous(
+    expand = c(0.01, 0),
+    limits = c(0, 1), 
+    labels = percent_format()) +
+  scale_x_continuous(
+    breaks = pretty_breaks(n = 10)) +
+  labs(
+    x = "Current Age (As of March 30, 2019)", 
+    y = "% of Minutes Played",  
+    title = "Vissel Kobe: Age-Utility Matrix",
+    subtitle = "J-League 2018 Season (100% = 3060 minutes)",
+    caption = glue("
+                   Data: transfermarkt.com
+                   *Subjective
+                   Created by: @R_by_Ryo"))  +
+  theme_bw() +
+  theme(
+    text = element_text(family = "Roboto Condensed"),
+    plot.title = element_text(color = "darkred", size = 16, face = "bold"),
+    plot.subtitle = element_text(size = 14),
+    #axis.title.y = element_text(angle = 0, vjust= 0.5),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    panel.border = element_rect(color = "darkred", size = 1.25)) -> kobe_plot_eng
+```
+
+```{r}
+ggsave(plot = kobe_plot_eng, "../J-League 2018/output/kobe_plotENG.png",
+       height = 6, width = 8)
+```
+
+```{r}
+plot_logo <- add_logo(plot_path = "../J-League 2018/output/kobe_plotENG.png",
+                      logo_path = "https://upload.wikimedia.org/wikipedia/en/8/87/VisselKobe.png",
+                      logo_position = "top right",
+                      logo_scale = 20)
+
+plot_logo
+```
+
+```{r}
+image_write(image = plot_logo, "../J-League 2018/output/kobe_logo_plotENG.png")
+```
+
+
+# FC Tokyo
+## scrape Tokyo
+
+```{r}
+session <- bow("https://www.transfermarkt.com/fc-tokyo/leistungsdaten/verein/6631/plus/0?reldata=JAP1%262017")
+
+print(session)
+# "The path is scrapable for this user-agent": OK, looks like we are good to go!
+
+# scraping tranfermarkt is a nightmare...
+# scrape each col individually then combine later...
+
+# grab name from photo element instead
+result_name <- scrape(session) %>% 
+  html_nodes("#yw1 .bilderrahmen-fixed") %>% 
+  html_attr("title") 
+
+# grab age
+result_age <- scrape(session) %>% 
+  html_nodes(".posrela+ .zentriert") %>% 
+  html_text()
+
+# grab minutes played in league
+result_mins <- scrape(session) %>% 
+  html_nodes("td.rechts") %>% 
+  html_text()
+```
+
+## clean tokyo
+
+```{r}
+# place each vector into list
+
+resultados <- list(result_name, result_age, result_mins)
+
+col_name <- c("name", "age", "minutes")
+
+# then reduce(cbind) to combine them, set names to cols 
+resultados %>% 
+  reduce(cbind) %>% 
+  as_tibble() %>% 
+  set_names(col_name) -> results_comb
+
+# NOICE.gif
+glimpse(results_comb)
+
+# fix "strings" into proper formats, calculate % of minutes appeared
+tokyo_minutes <- results_comb %>% 
+  
+  mutate(age = as.numeric(age),
+         minutes = minutes %>% 
+           str_replace("\\.", "") %>% 
+           str_replace("'", "") %>% 
+           as.numeric(),
+         min_perc = (minutes / 3060) %>% round(digits = 3)) %>% 
+  
+  filter(!is.na(minutes)) %>% 
+  
+  separate(name, into = c("first_name", "last_name"), by = " ") %>%
+  # manually fix somes names
+  mutate(last_name = case_when(
+    first_name == "Lins" ~ "Lins",
+    first_name == "Hyeon" ~ "H.S. Jang",
+    TRUE ~ last_name)) %>%
+  
+  arrange(desc(min_perc))
+
+# rectanglular highlight for players in their prime:
+rect_df <- data.frame(
+  xmin = 26, xmax = 31,
+  ymin = -Inf, ymax = Inf
+)
+
+glimpse(tokyo_minutes)
+```
+
+## plot Tokyo
+
+```{r fig.height=6, fig.width=8}
+tokyo_minutes %>% 
+  ggplot(aes(x = age, y = min_perc)) +
+  geom_vline(xintercept = 25, alpha = 0.4, color = "grey20") +
+  geom_hline(yintercept = 0.5, alpha = 0.4, color = "grey20") +
+  geom_mark_rect(aes(filter = age >= 26 & age <= 31), 
+                 description = "ピーク年齢*", con.cap = 0,
+                 color = NA, fill = "#271672", alpha = 0.5) + 
+  geom_point(color = "#DD2220", size = 2.5) +
+  geom_text_repel(
+    aes(label = last_name, family = "Roboto Condensed"),
+    nudge_x = 0.5,
+    seed = 6) + 
+  scale_y_continuous(
+    expand = c(0.01, 0),
+    limits = c(0, 1), 
+    labels = percent_format()) +
+  scale_x_continuous(
+    breaks = pretty_breaks(n = 10)) +
+  labs(
+    x = "年齢", 
+    y = tategaki_alt("出場時間（％）"),  
+    title = "FC東京: 年齢-出場時間プロット",
+    subtitle = "J-League 2018 Season (100% = 3060分)",
+    caption = glue("
+                   データ: transfermarkt.com
+                   *主観
+                   作: @R_by_Ryo")) +
+  theme_bw() +
+  theme(
+    text = element_text(family = "Roboto Condensed"),
+    panel.border = element_rect(color = "#271672", size = 1.25),
+    plot.title = element_text(color = "#271672", size = 16, face = "bold"),
+    plot.subtitle = element_text(color = "#DD2220", size = 14),
+    axis.title.y = element_text(angle = 0, vjust= 0.5),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12)) -> fctokyo_plot
+```
+
+```{r}
+ggsave(plot = fctokyo_plot, "../J-League 2018/output/fctokyo_plot.png",
+       height = 6, width = 8)
+```
+
+
+
+```{r}
+plot_logo <- add_logo(plot_path = "../J-League 2018/output/fctokyo_plot.png",
+                      logo_path = "https://upload.wikimedia.org/wikipedia/en/4/45/FCTokyo.png",
+                      logo_position = "top right",
+                      logo_scale = 18)
+
+plot_logo
+```
+
+```{r}
+image_write(image = plot_logo, "../J-League 2018/output/fctokyo_logo_plot.png")
+```
+
+
+
+# Shonan Bellmare 2019
+
+## scrape
+
+```{r}
+# https://www.transfermarkt.com/shonan-bellmare/leistungsdaten/verein/8457/plus/0?reldata=JAP1%262018
+session <- bow("https://www.transfermarkt.com/shonan-bellmare/leistungsdaten/verein/8457/plus/0?reldata=JAP1%262018")
+
+print(session)
+# "The path is scrapable for this user-agent": OK, looks like we are good to go!
+
+# scraping tranfermarkt is a nightmare...
+# scrape each col individually then combine later...
+
+# grab name from photo element instead
+result_name <- scrape(session) %>% 
+  html_nodes("#yw1 .bilderrahmen-fixed") %>% 
+  html_attr("title") 
+
+# grab age
+result_age <- scrape(session) %>% 
+  html_nodes(".posrela+ .zentriert") %>% 
+  html_text()
+
+# grab minutes played in league
+result_mins <- scrape(session) %>% 
+  html_nodes("td.rechts") %>% 
+  html_text()
+```
+
+
+## clean
+
+- NEED TO UPDATE AFTER EVERYMATCH DAY (ex. 3 Matches = 270 min >>> 4 Matches = 360 Min)
+
+```{r}
+# place each vector into list
+
+resultados <- list(result_name, result_age, result_mins)
+
+col_name <- c("name", "age", "minutes")
+
+# then reduce(cbind) to combine them, set names to cols 
+resultados %>% 
+  reduce(cbind) %>% 
+  as_tibble() %>% 
+  set_names(col_name) -> results_comb
+
+# NOICE.gif
+glimpse(results_comb)
+
+# fix "strings" into proper formats, calculate % of minutes appeared
+shonan_minutes <- results_comb %>% 
+  
+  mutate(age = as.numeric(age),
+         minutes = minutes %>% 
+           str_replace("\\.", "") %>% 
+           str_replace("'", "") %>% 
+           as.numeric(),
+         min_perc = (minutes / 360) %>% round(digits = 3)) %>% 
+  
+  filter(!is.na(minutes)) %>% 
+  
+  separate(name, into = c("first_name", "last_name"), by = " ") %>%
+  ## manually fix somes names
+  mutate(last_name = case_when(
+    first_name == "Freire" ~ "Freire",
+    TRUE ~ last_name)) %>%
+  
+  arrange(desc(min_perc))
+
+# rectanglular highlight for players in their prime:
+rect_df <- data.frame(
+  xmin = 26, xmax = 31,
+  ymin = -Inf, ymax = Inf
+)
+
+glimpse(shonan_minutes)
+```
+
+
+## plot
+
+
+```{r fig.height=6, fig.width=8}
+shonan_minutes %>% 
+  ggplot(aes(x = age, y = min_perc)) +
+  geom_vline(xintercept = 25, alpha = 0.4, color = "grey20") +
+  geom_hline(yintercept = 0.5, alpha = 0.4, color = "grey20") +
+  # geom_rect(
+  #   data = rect_df, inherit.aes = FALSE,
+  #   aes(xmin = xmin, xmax = xmax, 
+  #       ymin = ymin, ymax = ymax),
+  #   alpha = 0.5,
+  #   fill = "#67B356") +
+  geom_mark_rect(aes(filter = age >= 26 & age <= 31), 
+                 description = "ピーク年齢*", con.cap = 0,
+                 color = NA, fill = "#67B356", alpha = 0.5, size = 0.01) +
+  geom_point(color = "#103C95", size = 2.5) +
+  geom_text_repel(
+    aes(label = last_name, family = "Roboto Condensed"),
+    nudge_x = 0.5,
+    seed = 6) + 
+  scale_y_continuous(
+    expand = c(0.01, 0),
+    limits = c(0, 1.05), 
+    labels = percent_format()) +
+  scale_x_continuous(
+    breaks = pretty_breaks(n = 10)) +
+  labs(
+    x = "年齢 (3月22日2019年)", 
+    y = tategaki_alt("出場時間（％）"), 
+    title = "湘南ベルマーレ: 年齢-出場時間プロット",
+    subtitle = "J-League 2019 Season (4節: 100% = 360分)",
+    caption = glue("
+                   データ: transfermarkt.com
+                   *主観
+                   作: @R_by_Ryo")) +
+  theme_bw() +
+  theme(
+    text = element_text(family = "Roboto Condensed"),
+    #panel.grid.minor.y = element_blank(),
+    panel.border = element_rect(color = "#67B356", size = 1.25),
+    plot.title = element_text(color = "#67B356", size = 16, face = "bold"),
+    plot.subtitle = element_text(color = "#103C95", size = 14),
+    axis.title.y = element_text(angle = 0, vjust= 0.5),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12)) -> shonan_plot
+```
+
+
+
+
+```{r}
+ggsave(plot = shonan_plot, "../J-League 2018/output/shonan_plot.png",
+       height = 6, width = 8)
+```
+
+
+
+```{r}
+plot_logo <- add_logo(plot_path = "../J-League 2018/output/shonan_plot.png",
+                      logo_path = "https://upload.wikimedia.org/wikipedia/en/2/2c/ShonanBellmare.png",
+                      logo_position = "top right",
+                      logo_scale = 20)
+
+plot_logo
+```
+
+```{r}
+image_write(image = plot_logo, "../J-League 2018/output/shonan_logo_plot.png")
+```
+
+
+
+# Shimizu S-Pulse
+
+## scrape
+
+```{r}
+# https://www.transfermarkt.com/shonan-bellmare/leistungsdaten/verein/8457/plus/0?reldata=JAP1%262018
+session <- bow("https://www.transfermarkt.com/shimizu-s-pulse/leistungsdaten/verein/1062/plus/0?reldata=JAP1%262017")
+
+print(session)
+# "The path is scrapable for this user-agent": OK, looks like we are good to go!
+
+# scraping tranfermarkt is a nightmare...
+# scrape each col individually then combine later...
+
+# grab name from photo element instead
+result_name <- scrape(session) %>% 
+  html_nodes("#yw1 .bilderrahmen-fixed") %>% 
+  html_attr("title") 
+
+# grab age
+result_age <- scrape(session) %>% 
+  html_nodes(".posrela+ .zentriert") %>% 
+  html_text()
+
+# grab minutes played in league
+result_mins <- scrape(session) %>% 
+  html_nodes("td.rechts") %>% 
+  html_text()
+```
+
+
+## clean
+
+- NEED TO UPDATE AFTER EVERYMATCH DAY (ex. 3 Matches = 270 min >>> 4 Matches = 360 Min)
+
+```{r}
+# place each vector into list
+
+resultados <- list(result_name, result_age, result_mins)
+
+col_name <- c("name", "age", "minutes")
+
+# then reduce(cbind) to combine them, set names to cols 
+resultados %>% 
+  reduce(cbind) %>% 
+  as_tibble() %>% 
+  set_names(col_name) -> results_comb
+
+# NOICE.gif
+glimpse(results_comb)
+
+# fix "strings" into proper formats, calculate % of minutes appeared
+shimizu_minutes <- results_comb %>% 
+  
+  mutate(age = as.numeric(age),
+         minutes = minutes %>% 
+           str_replace("\\.", "") %>% 
+           str_replace("'", "") %>% 
+           as.numeric(),
+         min_perc = (minutes / 3060) %>% round(digits = 3)) %>% 
+  
+  filter(!is.na(minutes)) %>% 
+  
+  separate(name, into = c("first_name", "last_name"), by = " ") %>%
+  ## manually fix somes names
+  mutate(last_name = case_when(
+    first_name == "Freire" ~ "Freire",
+    first_name == "Crislan" ~ "Crislan",
+    first_name == "Douglas" ~ "Douglas",
+    first_name == "Seok" ~ "S.H. Hwang",
+    TRUE ~ last_name)) %>%
+  
+  arrange(desc(min_perc))
+
+# rectanglular highlight for players in their prime:
+rect_df <- data.frame(
+  xmin = 26, xmax = 31,
+  ymin = -Inf, ymax = Inf
+)
+
+glimpse(shimizu_minutes)
+```
+
+
+## plot
+- lighter blue: #0D6BA5
+- lightish blue: #0569AE
+- orange: #F29900
+
+```{r fig.height=6, fig.width=8}
+shimizu_minutes %>% 
+  ggplot(aes(x = age, y = min_perc)) +
+  geom_vline(xintercept = 25, alpha = 0.4, color = "grey20") +
+  geom_hline(yintercept = 0.5, alpha = 0.4, color = "grey20") +
+  geom_mark_rect(aes(filter = age >= 26 & age <= 31), 
+                 description = "ピーク年齢*", con.cap = 0,
+                 color = NA, fill = "#F29900", alpha = 0.5, size = 0.01) +
+  geom_point(color = "#0569AE", size = 2.5) +
+  geom_text_repel(
+    aes(label = last_name, family = "Roboto Condensed"),
+    nudge_x = 0.5,
+    seed = 6) + 
+  scale_y_continuous(
+    expand = c(0.01, 0),
+    limits = c(0, 1.05), 
+    labels = percent_format()) +
+  scale_x_continuous(
+    breaks = pretty_breaks(n = 10)) +
+  labs(
+    x = "年齢 (3月22日2019年)", 
+    y = tategaki_alt("出場時間（％）"), 
+    title = "清水エスパルス: 年齢-出場時間プロット",
+    subtitle = "J-League 2018 Season (100% = 3060分)",
+    caption = glue("
+                   *主観
+                   データ: transfermarkt.com
+                   作: @R_by_Ryo")) +
+  theme_bw() +
+  theme(
+    text = element_text(family = "Roboto Condensed"),
+    panel.border = element_rect(color = "#F29900", size = 1.25),
+    plot.title = element_text(color = "#F29900", size = 16, face = "bold"),
+    plot.subtitle = element_text(color = "#0569AE", size = 14),
+    axis.title.y = element_text(angle = 0, vjust= 0.5),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12)) -> shimizu_plot
+```
+
+
+
+
+```{r}
+ggsave(plot = shimizu_plot, "../J-League 2018/output/shimizu_plot.png",
+       height = 6, width = 8)
+```
+
+
+
+```{r}
+plot_logo <- add_logo(plot_path = "../J-League 2018/output/shimizu_plot.png",
+                      logo_path = "https://upload.wikimedia.org/wikipedia/en/4/4c/ShimizuS-Pulse.png",
+                      logo_position = "top right",
+                      logo_scale = 20)
+
+plot_logo
+```
+
+```{r}
+image_write(image = plot_logo, "../J-League 2018/output/shimizu_logo_plot.png")
+```
+
+### english version
+
+
+```{r fig.height=6, fig.width=8}
+shimizu_minutes %>% 
+  ggplot(aes(x = age, y = min_perc)) +
+  geom_vline(xintercept = 25, alpha = 0.4, color = "grey20") +
+  geom_hline(yintercept = 0.5, alpha = 0.4, color = "grey20") +
+  geom_mark_rect(aes(filter = age >= 26 & age <= 31), 
+                 description = "Prime Age*", con.cap = 0,
+                 color = NA, fill = "#F29900", alpha = 0.5, size = 0.01) +
+  geom_point(color = "#0569AE", size = 2.5) +
+  geom_text_repel(
+    aes(label = last_name, family = "Roboto Condensed"),
+    nudge_x = 0.5,
+    seed = 6) + 
+  scale_y_continuous(
+    expand = c(0.01, 0),
+    limits = c(0, 1.05), 
+    labels = percent_format()) +
+  scale_x_continuous(
+    breaks = pretty_breaks(n = 10)) +
+  labs(
+    x = "Current Age (As of March 30, 2019)", 
+    y = "% of Minutes Played", 
+    title = "Shimizu S-Pulse: Age-Utility Matrix",
+    subtitle = "J-League 2018 Season (100% = 3060 minutes)",
+    caption = glue("
+                   *Subjective
+                   Data: transfermarkt.com
+                   Created by: @R_by_Ryo")) +
+  theme_bw() +
+  theme(
+    text = element_text(family = "Roboto Condensed"),
+    panel.border = element_rect(color = "#F29900", size = 1.25),
+    plot.title = element_text(color = "#F29900", size = 16, face = "bold"),
+    plot.subtitle = element_text(color = "#0569AE", size = 14),
+    #axis.title.y = element_text(angle = 0, vjust= 0.5),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12)) -> shimizu_plot_eng
+```
+
+
+
+
+```{r}
+ggsave(plot = shimizu_plot_eng, "../J-League 2018/output/shimizu_plotENG.png",
+       height = 6, width = 8)
+```
+
+
+
+```{r}
+plot_logo <- add_logo(plot_path = "../J-League 2018/output/shimizu_plotENG.png",
+                      logo_path = "https://upload.wikimedia.org/wikipedia/en/4/4c/ShimizuS-Pulse.png",
+                      logo_position = "top right",
+                      logo_scale = 20)
+
+plot_logo
+```
+
+```{r}
+image_write(image = plot_logo, "../J-League 2018/output/shimizu_logo_plotENG.png")
+```

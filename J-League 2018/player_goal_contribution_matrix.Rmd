@@ -1,0 +1,509 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "March 19, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# % team goal involvement (チーム得点貢献度)
+
+- inspiration: https://www.reddit.com/r/soccer/comments/b2wdfn/oc_which_players_are_most_involved_in_their_teams/
+- first try with FC Tokyo
+- then scale it up for all teams
+- do 2018 season as only a few games into 2019 season...
+
+
+# pkgs
+
+```{r, message=FALSE, warning=FALSE}
+pacman::p_load(tidyverse, polite, scales, ggimage, 
+               rvest, glue, extrafont, ggrepel, magick)
+loadfonts()
+```
+
+# just FC Tokyo
+
+## scrape
+
+```{r}
+url <- "https://www.transfermarkt.com/fc-tokyo/leistungsdaten/verein/6631/reldata/JAP1%262017/plus/1"
+
+# .items
+# .items > tbody:nth-child(2)
+session <- bow(url)
+
+# fctokyo_table <- scrape(session) %>% 
+#   html_nodes(".items > tbody:nth-child(2)") %>% flatten()
+#   magrittr::extract(2)
+#   html_table(fill = TRUE) %>% 
+#   flatten_df()
+  #magrittr::extract(1)
+  
+# tr.odd:nth-child(1) > td:nth-child(7)
+  
+player_name <- scrape(session) %>% 
+  html_nodes("#yw1 .bilderrahmen-fixed") %>% 
+  html_attr("title") 
+  
+num_goals <- scrape(session) %>% 
+  html_nodes("td:nth-child(7)") %>% 
+  html_text()
+
+num_assists <- scrape(session) %>% 
+  html_nodes("td:nth-child(8)") %>% 
+  html_text()
+
+
+resultados <- list(player_name, num_goals, num_assists)
+col_names <- c("name", "goals", "assists")
+```
+
+## clean/tidy
+
+```{r}
+fctokyo_results <- resultados %>% 
+  reduce(cbind) %>% 
+  as_tibble() %>% 
+  set_names(col_names)
+
+fctokyo_df <- fctokyo_results %>% 
+  mutate_at(.vars = c("goals", "assists"), ~str_replace(., "-", "0") %>% as.numeric) %>% 
+  mutate(total_goals = sum(goals),
+         total_assists = sum(assists),
+         goal_contrib = goals/total_goals,
+         assist_contrib = assists/total_goals)
+
+```
+
+## plot
+
+```{r}
+fctokyo_plot <- fctokyo_df %>% 
+  ggplot(aes(assist_contrib, goal_contrib)) +
+  geom_point() +
+  scale_x_continuous(labels = percent) +
+  scale_y_continuous(labels = percent) +
+  labs(title = "Team Goal Involvement as Percentage of Total Club Goals",
+       subtitle = "J-League 2018 Season",
+       caption = glue("
+                      Data: transfermarkt
+                      By: @R_by_Ryo"),
+       x = "Percentage of Club Goals Assisted",
+       y = "Percentage of Club Goals Scored") +
+  theme_minimal()
+
+ggsave(plot = fctokyo_plot, filename = "../J-League 2018/fctokyo_plot.png")
+```
+
+## add_logo
+
+```{r}
+add_logo <- function(plot_path, logo_path, logo_position, logo_scale = 10){
+
+    # Requires magick R Package https://github.com/ropensci/magick
+
+    # Useful error message for logo position
+    if (!logo_position %in% c("top right", "top left", "bottom right", "bottom left")) {
+        stop("Error Message: Uh oh! Logo Position not recognized\n  Try: logo_positon = 'top left', 'top right', 'bottom left', or 'bottom right'")
+    }
+
+    # read in raw images
+    plot <- magick::image_read(plot_path)
+    logo_raw <- magick::image_read(logo_path)
+
+    # get dimensions of plot for scaling
+    plot_height <- magick::image_info(plot)$height
+    plot_width <- magick::image_info(plot)$width
+
+    # default scale to 1/10th width of plot
+    # Can change with logo_scale
+    logo <- magick::image_scale(logo_raw, as.character(plot_width/logo_scale))
+
+    # Get width of logo
+    logo_width <- magick::image_info(logo)$width
+    logo_height <- magick::image_info(logo)$height
+
+    # Set position of logo
+    # Position starts at 0,0 at top left
+    # Using 0.01 for 1% - aesthetic padding
+
+    if (logo_position == "top right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "top left") {
+        x_pos = 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "bottom right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    } else if (logo_position == "bottom left") {
+        x_pos = 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    }
+
+    # Compose the actual overlay
+    magick::image_composite(plot, logo, offset = paste0("+", x_pos, "+", y_pos))
+
+}
+```
+
+## tategaki function
+
+```{r}
+tategaki <- function(x){
+  x <- chartr("ー", "丨", x) # 長音符の処理
+  x <- strsplit(split="", x)
+  sapply(x, paste, collapse="\n")
+}
+
+tategaki_alt <- function(x){
+  x <- stringr::str_replace_all(x, "ー", "丨") # 長音符の処理
+  stringr::str_wrap(x, width = 1)
+}
+```
+
+
+```{r}
+logo_path <- "https://tmssl.akamaized.net//images/logo/normal/jap1.png?lm=1546692506"
+
+add_logo(plot_path = glue("{here::here()}/J-League 2018/fctokyo_plot.png"),
+         logo_path = logo_path, logo_position = "top right")
+```
+
+
+
+
+# all teams 
+
+## scrape
+
+```{r}
+# #yw1 > table:nth-child(2) > tbody:nth-child(3) > tr:nth-child(1) > td:nth-child(2) > a:nth-child(1)
+
+url <- "https://www.transfermarkt.com/j1-league/startseite/wettbewerb/JAP1/plus/?saison_id=2017"
+
+session <- bow(url)
+
+team_links <- scrape(session) %>% 
+  html_nodes("#yw1 > table > tbody > tr > td.zentriert.no-border-rechts > a") %>% 
+  html_attr("href")
+
+team_links_df <- team_links %>% 
+  enframe(name = NULL) %>% 
+  separate(value, c(NA, "team_name", NA, NA, "team_num", NA, NA), sep = "/") %>% 
+  mutate(link = glue("https://www.transfermarkt.com/{team_name}/leistungsdaten/verein/{team_num}/reldata/JAP1%262017/plus/1"))
+
+# for each team link:
+
+player_name_info <- function(link) {
+  
+  session <- bow(link)
+  
+  player_name_info <- scrape(session) %>% 
+    html_nodes("#yw1 .bilderrahmen-fixed") %>% 
+  html_attr("title") 
+  
+}
+
+num_goals_info <- function(link) {
+  
+  session <- bow(link)
+  
+  num_goals_info <- scrape(session) %>% 
+    html_nodes("td:nth-child(7)") %>% 
+    html_text()
+}
+
+num_assists_info <- function(link) {
+  
+  session <- bow(link)
+  
+  num_assists_info <- scrape(session) %>% 
+    html_nodes("td:nth-child(8)") %>% 
+    html_text()
+}
+
+# BIG FUNCTION
+
+jleague_stats_info <- function(link) {
+  
+  session <- bow(link)
+  
+  player_name_info <- scrape(session) %>% 
+    html_nodes("#yw1 .bilderrahmen-fixed") %>% 
+  html_attr("title") 
+
+  num_goals_info <- scrape(session) %>% 
+    html_nodes("td:nth-child(7)") %>% 
+    html_text()
+
+  num_assists_info <- scrape(session) %>% 
+    html_nodes("td:nth-child(8)") %>% 
+    html_text()
+  
+  resultados <- list(player_name_info, num_goals_info, num_assists_info)
+  col_names <- c("name", "goals", "assists") 
+  
+  jleague_stats <- resultados %>% 
+    reduce(cbind) %>% 
+    as_tibble() %>% 
+    set_names(col_names)
+  
+}
+```
+
+### all at once
+
+```{r}
+# ALL 18 TEAMS AT ONCE, WILL TAKE A WHILE:
+goal_contribution_df_ALL <- map2(.x = team_links_df$link, 
+                             .y = team_links_df$team_name,
+                             ~ jleague_stats_info(link = .x) %>% mutate(team = .y))
+
+goal_contribution_df <- goal_contribution_df_ALL %>% 
+  reduce(rbind)
+
+## save
+saveRDS(goal_contribution_df, file = glue("{here::here()}/data/goal_contrib_df.RDS"))
+```
+
+### piece-wise
+
+```{r}
+# break scraping into groups of 4-5 teams, then combine:
+goal_contribution_df1 <- map2(.x = team_links_df$link[1:3], 
+                             .y = team_links_df$team_name[1:3],
+                             ~ jleague_stats_info(link = .x) %>% mutate(team = .y))
+
+goal_contribution_df2 <- map2(.x = team_links_df$link[4:8], 
+                             .y = team_links_df$team_name[4:8],
+                             ~ jleague_stats_info(link = .x) %>% mutate(team = .y))
+
+goal_contribution_df3 <- map2(.x = team_links_df$link[9:13], 
+                             .y = team_links_df$team_name[9:13],
+                             ~ jleague_stats_info(link = .x) %>% mutate(team = .y))
+
+goal_contribution_df4 <- map2(.x = team_links_df$link[14:18], 
+                             .y = team_links_df$team_name[14:18],
+                             ~ jleague_stats_info(link = .x) %>% mutate(team = .y))
+
+a1 <- goal_contribution_df1 %>% reduce(rbind)
+a2 <- goal_contribution_df2 %>% reduce(rbind)
+a3 <- goal_contribution_df3 %>% reduce(rbind)
+a4 <- goal_contribution_df4 %>% reduce(rbind)
+
+
+resultados_grande <- list(a1, a2, a3, a4)
+
+goal_contribution_df <- resultados_grande %>% 
+  reduce(rbind)
+
+## save
+saveRDS(goal_contribution_df, file = glue("{here::here()}/data/goal_contrib_df.RDS"))
+goal_contribution_df <- readRDS(file = glue("{here::here()}/data/goal_contrib_df.RDS"))
+```
+
+```{r Miscellaneous}
+goal_contribution_df1 <- map2(.x = team_links_df$link[1:3], 
+                              .y = team_links_df$team_name[1:3],
+                              ~ jleague_stats_info(link = .x) %>% 
+                                set_names(., nm = seq_along(.y)))
+# goal_contribution_df <- map(team_links_df$link[1:3], ~ jleague_stats_info) %>% 
+#   set_names(team_links_df$team_name[1:3])
+
+# YES
+the_big_data <- team_links_df[1:3,] %>% 
+  ## map each team URL link to the data-getting function
+  mutate(data = map(team_links_df$link[1:3], ~ jleague_stats_info(.x))) %>% 
+  ## set names of each data list to team name
+  mutate(data = data %>% set_names(team_links_df$team_name[1:3]))
+
+the_big_data2$data$`vissel-kobe`$goals
+
+# clean/tidy each team data list-column
+the_big_data2 %>% 
+  mutate(data = map(data, ~ .x %>% 
+                      mutate_at(.vars = c("goals", "assists"), 
+                                ~str_replace(., "-", "0") %>% as.numeric) %>% 
+                      mutate(total_goals = sum(goals),
+                             total_assists = sum(assists),
+                             goal_contrib = goals/total_goals,
+                             assist_contrib = assists/total_goals))) -> big_data3
+
+big_data3$data
+```
+
+
+- mutate in team name into DATA itself
+- take out all the data >>> bind_rows into single df
+- `mutate()` in similar way inside list >>> separate out and save each as separate dataframe
+- make ggplot function >>> inputs: colors, team name in title
+
+## clean
+
+```{r}
+goal_contribution_clean_df <- goal_contribution_df %>% 
+  mutate_at(.vars = c("goals", "assists"), 
+            ~str_replace(., "-", "0") %>% as.numeric) %>% 
+  mutate(team = team %>% str_replace_all(., "-", " ") %>% str_to_title) %>% 
+  group_by(team) %>% 
+  mutate(total_goals = sum(goals),
+         total_assists = sum(assists),
+         goal_contrib = goals/total_goals,
+         assist_contrib = assists/total_goals) %>% 
+  ungroup()
+
+## save
+saveRDS(goal_contribution_clean_df, 
+        file = glue("{here::here()}/data/goal_contrib_clean_df.RDS"))
+goal_contribution_clean_df <- readRDS(file = glue("{here::here()}/data/goal_contrib_clean_df.RDS"))
+```
+
+```{r}
+goal_contribution_clean_df %>% 
+  ggplot(aes(goal_contrib)) +
+  geom_histogram()
+
+goal_contribution_clean_df %>% 
+  ggplot(aes(assist_contrib)) +
+  geom_histogram()
+
+goal_contribution_clean_df %>% 
+  summarize(mean_goals = mean(total_goals),
+            mean_assists = mean(total_assists),
+            median_goals_contrib = median(goal_contrib),
+            median_assists_contrib = median(assist_contrib))
+
+goal_contribution_clean_df %>% 
+  summarize(iqr_goals = quantile(goal_contrib)[4],
+         iqr_assists = quantile(assist_contrib)[4])
+
+goal_contribution_clean_df %>% 
+  ggplot(aes(goal_contrib)) +
+  geom_histogram() +
+  geom_vline(xintercept = quantile(goal_contribution_clean_df$goal_contrib)[4])
+```
+
+- numbers mostly 0s (defenders, goalkeepers, etc.) >>> positive skew
+- median == 0!
+- mean will be very low
+
+## plot
+
+```{r fig.width = 10, fig.height = 8}  
+goal_contribution_clean_df %>% 
+  ggplot(aes(assist_contrib, goal_contrib)) +
+  geom_point(data = goal_contribution_clean_df %>%
+                    filter(goal_contrib < 0.25 | assist_contrib < 0.15),
+             color = "grey20", size = 4, alpha = 0.2) +
+  geom_point(data = goal_contribution_clean_df %>%
+                    filter(goal_contrib > 0.25 | assist_contrib > 0.15),
+             color = "red", size = 4) +
+  geom_hline(yintercept = 0.25, color = "grey20", alpha = 0.4) +
+  geom_vline(xintercept = 0.15, color = "grey20", alpha = 0.4) +
+  # gghighlight::gghighlight(goal_contrib > 0.25 | assist_contrib > 0.15,
+  #                          label_key = name, 
+  #                          label_params = list(size = 3.5)) +
+  geom_text_repel(data = goal_contribution_clean_df %>%
+                    filter(goal_contrib > 0.25 | assist_contrib > 0.15),
+                  aes(label = name, family = "Roboto Condensed", fontface = "bold"), 
+                  seed = 7, size = 5, 
+                  min.segment.length = 0, segment.color = "red",
+                  point.padding = 0.5) +
+  scale_x_continuous(labels = percent_format(accuracy = 1), 
+                     breaks = c(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3),
+                     limits = c(0, 0.3)) +
+  scale_y_continuous(labels = percent_format(accuracy = 1), 
+                     breaks = c(0, 0.1, 0.2, 0.3, 0.4, 0.5),
+                     limits = c(0, 0.5)) +
+  labs(title = "Team Goal Involvement as Percentage of Total Club Goals",
+       subtitle = "J.League 2018 Season",
+       caption = glue("
+                      Data: transfermarkt.com
+                      By: @R_by_Ryo"),
+       x = "Percentage of Club Goals Assisted",
+       y = "Percentage of Club Goals Scored") +
+  theme_minimal() +
+  theme(text = element_text(family = "Roboto Condensed"),
+        title = element_text(size = 20),
+        plot.subtitle = element_text(size = 18),
+        plot.caption = element_text(size = 8),
+        axis.title = element_text(size = 15),
+        axis.text = element_text(size = 14),
+        panel.grid.minor.x = element_blank()) -> goal_contribution_matrix
+```
+
+- gghighlight with geom_text_repel() instead??? PR?
+- contribution score: goals + assist / 2 ?
+- in Japanese: 得点貢献度
+
+
+```{r fig.width = 10, fig.height = 8}  
+goal_contribution_clean_df %>% 
+  ggplot(aes(assist_contrib, goal_contrib)) +
+  geom_point(data = goal_contribution_clean_df %>%
+                    filter(goal_contrib < 0.25 | assist_contrib < 0.15),
+             color = "grey20", size = 4, alpha = 0.2) +
+  geom_point(data = goal_contribution_clean_df %>%
+                    filter(goal_contrib > 0.25 | assist_contrib > 0.15),
+             color = "red", size = 4) +
+  geom_hline(yintercept = 0.25, color = "grey20", alpha = 0.4) +
+  geom_vline(xintercept = 0.15, color = "grey20", alpha = 0.4) +
+  geom_text_repel(data = goal_contribution_clean_df %>%
+                    filter(goal_contrib > 0.25 | assist_contrib > 0.15),
+                  aes(label = name, family = "Roboto Condensed", fontface = "bold"), 
+                  seed = 7, size = 5, 
+                  min.segment.length = 0, segment.color = "red",
+                  point.padding = 0.5) +
+  scale_x_continuous(labels = percent_format(accuracy = 1), 
+                     breaks = c(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3),
+                     limits = c(0, 0.3)) +
+  scale_y_continuous(labels = percent_format(accuracy = 1), 
+                     breaks = c(0, 0.1, 0.2, 0.3, 0.4, 0.5),
+                     limits = c(0, 0.5)) +
+  labs(title = "得点貢献度 (チームのゴール・アシスト割合)",
+       subtitle = "J.League 2018 シーズン",
+       caption = glue("
+                      データ: transfermarkt.com
+                      作: @R_by_Ryo"),
+       x = "アシスト割合",
+       y = tategaki_alt("ゴール割合")) +
+  theme_minimal() +
+  theme(text = element_text(family = "Roboto Condensed"),
+        title = element_text(size = 20),
+        plot.subtitle = element_text(size = 18),
+        plot.caption = element_text(size = 8),
+        axis.title = element_text(size = 15),
+        axis.title.y = element_text(angle = 0, vjust= 0.5),
+        axis.text = element_text(size = 14),
+        panel.grid.minor.x = element_blank()) -> goal_contribution_matrix_jp
+```
+
+
+
+```{r}
+ggsave(plot = goal_contribution_matrix_jp, 
+       "../J-League 2018/output/goal_contribution_matrix_plot_jp.png",
+       height = 8, width = 10)
+```
+
+
+
+```{r}
+plot_logo <- add_logo(
+  plot_path = "../J-League 2018/output/goal_contribution_matrix_plot_jp.png",
+  logo_path = "https://upload.wikimedia.org/wikipedia/en/3/31/J.League_%28local%29.png",
+  logo_position = "top right",
+  logo_scale = 18)
+
+plot_logo
+```
+
+```{r}
+image_write(image = plot_logo, 
+            "../J-League 2018/output/goal_contribution_matrix_plot_jp_logo.png")
+```

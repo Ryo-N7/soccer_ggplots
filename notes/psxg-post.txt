@@ -1,0 +1,13 @@
+Goalkeeper Performance & Workload 📊 for the #Bundesliga using @FBRef's new post-shot xG & GSAA provided by @StatsBomb!
+
+- #BVB: Bürki leaking goals from shots he should save.
+- #DieFohlen: Sommer in excellent form.
+- #WerderBremen: Pavlenka under bombardment.
+
+#rstats #ggplot2
+
+
+A bit more detail on post-shot xG & Goals Saved Above Average: https://statsbomb.com/2018/11/intro-to-goalkeeper-analysis/
+
+and FBref's own primer: https://fbref.com/en/expected-goals-model-explained/
+

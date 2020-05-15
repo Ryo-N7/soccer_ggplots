@@ -1,0 +1,40 @@
+,,,,,,,,Goals,Goals,Goals,Goals,Goals,Expected,Expected,Expected,Expected,Launched,Launched,Launched,Passes,Passes,Passes,Passes,Goal Kicks,Goal Kicks,Goal Kicks,Crosses,Crosses,Crosses,Sweeper,Sweeper,Sweeper,
+Rk,Player,Nation,Pos,Squad,Age,Born,90s,GA,PKA,FK,CK,OG,PSxG,PSxG/SoT,PSxG+/-,/90,Cmp,Att,Cmp%,Att,Thr,Launch%,AvgLen,Att,Launch%,AvgLen,Att,Stp,Stp%,#OPA,#OPA/90,AvgDist,Matches
+1,Antonio Adán\Antonio-Adan,es ESP,GK,Atlético Madrid,32,1987,0.3,0,0,0,0,0,0.0,0.03,0.0,+0.12,1,3,33.3,5,1,40.0,44.0,1,100.0,67.0,0,0,,1,3.75,14.7,Matches
+2,Sergio Álvarez\Sergio-Alvarez,es ESP,GK,Celta Vigo,32,1986,2.0,1,0,0,0,0,0.9,0.23,-0.1,-0.04,8,22,36.4,34,5,32.4,35.6,19,57.9,43.0,17,2,11.8,0,0.00,16.5,Matches
+3,Miguel Ángel Moyá\Miguel-Angel-Moya,es ESP,GK,Real Sociedad,35,1984,7.0,9,0,0,0,1,7.8,0.24,-0.2,-0.03,57,112,50.9,201,36,29.9,32.8,73,71.2,48.1,37,5,13.5,5,0.71,14.5,Matches
+4,Alphonse Areola\Alphonse-Areola,fr FRA,GK,Real Madrid,26,1993,3.0,3,2,0,1,0,3.5,0.69,+0.5,+0.15,13,28,46.4,77,16,20.8,29.1,19,63.2,45.9,25,0,0.0,5,1.67,14.2,Matches
+5,Sergio Asenjo\Sergio-Asenjo,es ESP,GK,Villarreal,30,1989,23.0,28,3,0,5,0,25.5,0.28,-2.5,-0.11,111,298,37.2,501,93,37.9,36.7,196,55.1,44.9,162,10,6.2,11,0.48,14.4,Matches
+6,Rubén Blanco\Ruben-Blanco,es ESP,GK,Celta Vigo,24,1995,24.0,33,4,3,2,0,31.1,0.33,-1.9,-0.08,153,436,35.1,527,93,53.9,42.3,221,68.8,53.8,167,10,6.0,8,0.33,14.0,Matches
+7,Yassine Bounou\Yassine-Bounou,ma MAR,GK,Sevilla,28,1991,1.5,2,1,0,0,0,2.3,0.57,+0.3,+0.19,12,24,50.0,28,8,35.7,33.1,15,93.3,63.1,13,1,7.7,0,0.00,14.1,Matches
+8,Jasper Cillessen\Jasper-Cillessen,nl NED,GK,Valencia,30,1989,14.3,18,4,1,1,0,17.4,0.31,-0.6,-0.04,77,231,33.3,302,72,48.3,39.1,119,71.4,56.9,118,8,6.8,7,0.49,12.7,Matches
+9,Thibaut Courtois\Thibaut-Courtois,be BEL,GK,Real Madrid,27,1992,23.0,14,0,0,2,0,16.3,0.29,+2.3,+0.10,53,202,26.2,535,135,27.5,33.7,139,39.6,40.9,159,14,8.8,14,0.61,14.8,Matches
+10,Iván Cuéllar\Ivan-Cuellar,es ESP,GK,Leganés,35,1984,15.0,20,0,0,6,0,19.2,0.34,-0.8,-0.06,126,351,35.9,342,58,69.6,52.0,122,92.6,67.2,106,10,9.4,21,1.40,17.8,Matches
+11,Marko Dmitrović\Marko-Dmitrovic,rs SRB,GK,Eibar,27,1992,24.0,37,2,0,3,1,32.6,0.42,-3.4,-0.14,186,573,32.5,560,62,73.6,57.9,166,97.0,76.5,121,12,9.9,35,1.46,18.1,Matches
+12,Jaume Doménech\Jaume-Domenech,es ESP,GK,Valencia,28,1990,11.7,20,0,1,4,0,21.0,0.30,+1.0,+0.09,87,207,42.0,268,47,48.1,38.1,105,74.3,53.4,103,4,3.9,6,0.51,13.1,Matches
+13,Aarón Escandell\Aaron-Escandell,es ESP,GK,Granada,23,1995,1.0,1,0,0,0,0,0.9,0.30,-0.1,-0.11,10,28,35.7,31,5,74.2,55.6,8,62.5,51.1,4,0,0.0,0,0.00,13.0,Matches
+14,Fabricio\Fabricio,es ESP,GK,Mallorca,31,1987,1.0,3,2,0,1,0,1.8,0.35,-1.2,-1.23,8,17,47.1,24,6,50.0,41.0,9,55.6,47.3,5,0,0.0,1,1.00,15.3,Matches
+15,Aitor Fernández\Aitor-Fernandez,es ESP,GK,Levante,28,1991,26.0,39,3,1,7,1,49.4,0.33,+11.4,+0.44,158,427,37.0,567,139,51.9,42.4,249,53.4,44.7,186,15,8.1,20,0.77,14.0,Matches
+16,Andrés Fernández\Andres-Fernandez,es ESP,GK,Villarreal,32,1986,3.0,8,3,0,2,1,6.6,0.47,-0.4,-0.13,16,40,40.0,67,12,37.3,33.4,31,48.4,42.1,30,0,0.0,0,0.00,11.1,Matches
+17,Sergio Herrera\Sergio-Herrera,es ESP,GK,Osasuna,26,1993,11.4,21,1,1,3,0,18.3,0.33,-2.7,-0.24,104,266,39.1,283,57,67.1,48.5,84,90.5,62.1,58,9,15.5,16,1.41,17.3,Matches
+18,Iago Herrerín\Iago-Herrerin,es ESP,GK,Athletic Bilbao,31,1988,3.0,3,0,1,0,0,3.0,0.33,0.0,-0.01,33,81,40.7,90,17,76.7,52.5,14,85.7,56.4,22,5,22.7,0,0.00,10.9,Matches
+19,Diego López\Diego-Lopez,es ESP,GK,Espanyol,37,1981,26.0,45,4,0,4,1,33.7,0.31,-10.3,-0.39,169,521,32.4,606,85,58.3,45.4,223,75.3,53.9,170,17,10.0,19,0.73,14.5,Matches
+20,Daniel Martín\Daniel-Martin,es ESP,GK,Betis,21,1998,1.9,7,0,0,0,0,2.9,0.29,-4.1,-2.18,11,27,40.7,46,13,32.6,31.9,16,75.0,51.3,21,1,4.8,1,0.53,11.4,Matches
+21,Jordi Masip\Jordi-Masip,es ESP,GK,Valladolid,30,1989,26.0,29,4,1,3,0,34.7,0.36,+5.7,+0.22,199,572,34.8,522,93,65.5,47.2,277,83.0,59.5,193,9,4.7,4,0.15,11.0,Matches
+22,Neto\Neto,br BRA,GK,Barcelona,30,1989,1.0,2,0,0,0,0,0.8,0.26,-1.2,-1.23,4,9,44.4,30,3,23.3,26.3,9,22.2,26.9,3,0,0.0,1,1.00,16.0,Matches
+23,Jan Oblak\Jan-Oblak,si SVN,GK,Atlético Madrid,26,1993,25.7,19,0,1,4,1,16.3,0.23,-1.7,-0.07,192,457,42.0,427,66,67.2,47.7,212,80.2,58.8,152,8,5.3,11,0.43,13.7,Matches
+24,Fernando Pacheco\Fernando-Pacheco,es ESP,GK,Alavés,27,1992,23.0,33,7,2,2,0,33.2,0.40,+0.2,+0.01,257,528,48.7,477,83,67.5,47.3,227,90.7,60.8,167,16,9.6,8,0.35,13.4,Matches
+25,Juan Pérez\Juan-Perez,es ESP,GK,Osasuna,23,1996,2.0,3,1,0,0,0,2.7,0.34,-0.3,-0.14,20,48,41.7,53,9,73.6,51.6,13,69.2,55.4,13,0,0.0,1,0.50,12.2,Matches
+26,Andrés Prieto\Andres-Prieto,es ESP,GK,Espanyol,25,1993,0.0,0,0,,,,,,,,,,,,,,,,,,,,,,,,Matches
+27,Manolo Reina\Manolo-Reina,es ESP,GK,Mallorca,34,1985,25.0,40,9,0,4,1,41.5,0.37,+2.5,+0.10,186,483,38.5,619,137,55.7,42.8,219,63.0,51.9,198,20,10.1,18,0.72,14.0,Matches
+28,Álex Remiro\Alex-Remiro,es ESP,GK,Real Sociedad,24,1995,18.0,22,1,2,2,0,20.2,0.32,-1.8,-0.10,130,287,45.3,559,53,38.5,36.6,102,70.6,53.7,107,10,9.3,16,0.89,17.8,Matches
+29,Joel Robles\Joel-Robles,es ESP,GK,Betis,29,1990,24.1,35,8,0,1,1,33.5,0.37,-0.5,-0.02,133,351,37.9,696,105,37.8,36.4,191,46.1,40.7,161,7,4.3,20,0.83,15.2,Matches
+30,Rubén\Ruben,es ESP,GK,Osasuna,35,1984,12.6,14,3,1,0,0,12.9,0.43,-1.1,-0.09,103,276,37.3,262,48,69.1,51.4,114,83.3,61.0,97,6,6.2,3,0.24,13.5,Matches
+31,Rui Silva\Rui-Silva,pt POR,GK,Granada,25,1994,25.0,30,3,1,2,0,30.1,0.30,+0.1,0.00,241,644,37.4,693,70,68.8,50.1,211,79.1,59.1,142,15,10.6,26,1.04,15.9,Matches
+32,Unai Simón\Unai-Simon,es ESP,GK,Athletic Bilbao,22,1997,23.0,19,2,0,2,2,24.2,0.35,+7.2,+0.31,212,496,42.7,570,92,61.2,46.4,163,90.2,65.4,166,11,6.6,14,0.61,14.9,Matches
+33,Antonio Sivera\Antonio-Sivera,es ESP,GK,Alavés,22,1996,3.0,3,1,0,0,0,2.0,0.49,-1.0,-0.34,24,64,37.5,56,9,71.4,52.4,27,88.9,63.4,20,1,5.0,0,0.00,12.8,Matches
+34,David Soria\David-Soria,es ESP,GK,Getafe,26,1993,26.0,25,1,0,2,0,27.6,0.37,+2.6,+0.10,244,668,36.5,587,26,86.7,58.8,167,95.2,63.9,140,12,8.6,34,1.31,17.2,Matches
+35,Juan Soriano\Juan-Soriano,es ESP,GK,Leganés,21,1997,11.0,18,5,1,0,1,15.1,0.44,-1.9,-0.17,49,175,28.0,222,59,52.3,45.8,75,78.7,63.1,53,4,7.5,7,0.64,18.3,Matches
+36,Marc-André ter Stegen\Marc-Andre-ter-Stegen,de GER,GK,Barcelona,27,1992,25.0,29,4,1,1,0,24.4,0.31,-4.6,-0.18,145,234,62.0,765,128,24.1,28.6,165,30.3,31.2,145,6,4.1,16,0.64,14.4,Matches
+37,Tomáš Vaclík\Tomas-Vaclik,cz CZE,GK,Sevilla,30,1989,24.5,25,1,3,2,0,20.5,0.28,-4.5,-0.18,132,322,41.0,524,113,41.8,38.1,170,60.6,48.2,154,12,7.8,12,0.49,13.9,Matches
+38,Yoel\Yoel,es ESP,GK,Eibar,30,1988,1.0,0,0,0,0,0,0.8,0.27,+0.8,+0.82,13,31,41.9,29,2,82.8,61.2,8,87.5,66.5,10,0,0.0,2,2.00,17.0,Matches

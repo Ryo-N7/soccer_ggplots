@@ -1,0 +1,336 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "June 15, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+library(tidyverse)
+library(ggsoccer)
+library(ggimage)
+library(extrafont)
+# loadfonts()
+
+#                              2   1  
+pass_data <- data.frame(x = c( 84, 82),
+                        y = c(  6, 32),
+                        x2 = c(77, 84),
+                        y2 = c(13, 8))
+
+#                            corner kick
+curve_data <- data.frame(x = c(100),
+                         y = c(0),
+                         x2 = c(94),
+                         y2 = c(35))
+# golovin cross
+cross_data <- data.frame(x = 76,
+                         y = 19,
+                         x2 = 94,
+                         y2 = 60)
+
+# Saudi failed clearance 
+clearance_data <- data.frame(x = c(94),
+                             y = c(35),
+                             x2 = c(82),
+                             y2 = c(33.5))
+
+# Gazinski header
+goal_data <- data.frame(x = c(94),
+                        y = c(60),
+                        x2 = c(99.2),
+                        y2 = c(47.5))
+
+# soccer ball image
+goal_img <- data.frame(x = 100,
+                       y = 47) %>% 
+  mutate(image = "https://d30y9cdsu7xlg0.cloudfront.net/png/43563-200.png")
+
+# golovin movement
+golovin_data <- data.frame(x = c(83),
+                           y = c(24.25),
+                           x2 = c(77),
+                           y2 = c(21))
+
+# zhirkov movement 
+zhirkov_data <- data.frame(x = 98,
+                           y = 2,
+                           x2 = 88,
+                           y2 = 6)
+
+g <- ggplot(pass_data) +
+  annotate_pitch() +
+  geom_segment(aes(x = x, y = y, xend = x2, yend = y2),
+               arrow = arrow(length = unit(0.25, "cm"),
+                             type = "closed")) +
+  geom_segment(data = clearance_data,
+               aes(x = x, y = y, xend = x2, yend = y2
+                   ), linetype = "dashed", size = 0.85) +
+  geom_segment(data = goal_data,
+               aes(x = x, y = y, xend = x2, yend = y2
+                   ), linetype = "dashed", color = "red", size = 0.85) +
+  geom_segment(data = golovin_data,
+               aes(x = x, y = y, xend = x2, yend = y2
+                   ), linetype = "dashed", color = "darkgreen", size = 1.2) +
+  geom_segment(data = zhirkov_data,
+               aes(x = x, y = y, xend = x2, yend = y2
+                   ), linetype = "dashed", color = "darkgreen", size = 1.25) +
+  geom_curve(data = curve_data, 
+             aes(x = x, y = y, xend = x2, yend = y2), 
+             curvature = 0.25, 
+             arrow = arrow(length = unit(0.25, "cm"),
+                             type = "closed")) +
+  geom_curve(data = cross_data, 
+             aes(x = x, y = y, xend = x2, yend = y2), 
+             curvature = 0.25, 
+             arrow = arrow(length = unit(0.25, "cm"),
+                             type = "closed")) +
+  geom_image(data = goal_img,
+             aes(x = x, y = y,
+                 image = image), size = 0.035) +
+  theme_pitch() + 
+  theme(text = element_text(family = "Trebuchet MS")) +
+  coord_flip(xlim = c(49, 101),
+             ylim = c(-1, 101)) +
+  ggtitle(label = "Russia (5) vs. (0) Saudi Arabia", 
+          subtitle = "First goal, Yuri Gazinsky (12th Minute)") +
+  labs(caption = "By Ryo Nakagawara (@R_by_Ryo)") +
+  geom_label(aes(x = 94, y = 60, label = "Gazinsky"), hjust = -0.1) +
+  geom_label(aes(x = 83, y = 23, label = "Golovin"), hjust = -0.05) +
+  geom_label(aes(x = 75, y = 11, label = "Golovin"), hjust = -0.1) +
+  geom_label(aes(x = 98, y = 0, label = "Zhirkov"), vjust = -0.3) +
+  geom_label(aes(x = 84, y = 6, label = "Zhirkov"), vjust = -0.3) +
+  annotate("text", x = 69, y = 65, family = "Trebuchet MS",
+           label = "After a poor corner kick clearance\n from Saudi Arabia, Golovin picks up the loose ball, \n exchanges a give-and-go pass with Zhirkov\n before finding Gazinsky with a beautiful cross!")
+
+ggsave(g, filename = "gazinsky_goal.png")
+
+```
+
+
+
+
+## Cristiano Ronaldo hattrick
+
+
+```{r}
+library(ggplot2)
+library(ggsoccer)
+library(extrafont)
+library(emoGG)
+library(ggimage)
+# loadfonts()
+# Official WC 2018 Font: "Dusha"
+# http://fifa2018wiki.com/fifa-2018-font-typeface-download-dusha-font-ttf/509/
+
+emoji_search("soccer")  # "26bd"
+
+goals_data <- data.frame(x = c(88, 80, 71),
+                         y = c(50, 48, 54))
+
+cr <- ggplot(goals_data) +
+  annotate_pitch() +
+  theme_pitch() +
+  theme(text = element_text(family = "Dusha V5")) +
+  coord_flip(xlim = c(55, 112),
+             ylim = c(-1, 101)) +
+  geom_curve(x = 88, y = 50, 
+             xend = 100, yend = 54,     # Penaldo
+             curvature = 0.3, 
+             arrow = arrow(length = unit(0.25, "cm"),
+                             type = "closed")) +
+  geom_segment(x = 80, y = 48, 
+               xend = 97, yend = 48) +  # 2nd 
+  geom_segment(x = 97, y = 48, 
+               xend = 100, yend = 45.5,
+               arrow = arrow(length = unit(0.25, "cm"),
+                             type = "closed")) +        # degea fumble
+  geom_curve(x = 71, y = 54, 
+             xend = 100, yend = 54,     # FREEKICK
+             curvature = 0.3, 
+             arrow = arrow(length = unit(0.25, "cm"),
+                             type = "closed")) +
+  annotate(geom = "text", family = "Dusha V5", hjust = c(0.5, 0.5, 0.5, 0, 0, 0),
+           size = c(6.5, 4.5, 3, 3.5, 3.5, 3.5),
+           label = c("Portugal             (3) vs. Spain             (3)",
+                     "Cristiano's Hattrick (4', 44', 88')",
+                     "by Ryo Nakagawara (@R_by_Ryo)",
+                     "1. Fouled by Nacho in the box,\nCristiano confidently strokes the ball\ninto the right corner from the spot.",
+                     "2. Guedes lays it off to Cristiano whose\nstrong shot is uncharacteristically\nfumbled by De Gea into the net.",
+                     "In the final minutes of the game,\nCristiano wins a freekick against Pique\nand curls it beautifully over the wall."),
+           x = c(110, 105, 53, 76, 66, 66), 
+           y = c(30, 20, 85, 5, 5, 55)) +
+  ggimage::geom_flag(aes(image = "PT"),       # Portugal Flag
+            x = 110, y = 19.1, size = 0.08) +
+  ggimage::geom_flag(aes(image = "ES"),       # Spain Flag
+            x = 110, y = 51.1, size = 0.08) +
+  ggimage::geom_emoji(aes(x = 105, 
+                          y = c(45, 50, 55)),
+             image = "26bd", size = 0.035) +
+  geom_point(aes(x = x, y = y), 
+             shape = 21, size = 7, color = "black", fill = "white") +
+  geom_text(aes(x = x, y = y, label = c(1, 2, 3)), family = "Dusha V5")
+
+ggsave(cr, filename = "cr_hattrick.png")
+
+```
+
+
+"1. Fouled by Nacho in the box, Cristiano confidently strokes the ball into the right corner from the spot."
+
+"2. Guedes lays it off to Cristiano who's strong shot is uncharacteristically fumbled by De Gea into the net."
+
+"3. In the final minutes of the game, Cristiano wins a freekick against Pique and curls it beautifully over the wall."
+
+
+### OSAKO GOL GOL GOL
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(ggsoccer)
+library(extrafont)
+library(emoGG)
+library(ggimage)
+
+
+cornerkick_data <- data.frame(x = 99, y = 0.3,
+                              x2 = 94, y2 = 47)
+
+osako_gol <- data.frame(x = 94, y = 49,
+                        x2 = 100, y2 = 55.5)
+
+player_label <- data.frame(x = c(92, 99), 
+                           y = c(49, 2))
+
+wc_logo <- data.frame(x = 107,
+                       y = 85) %>% 
+  mutate(image = "https://upload.wikimedia.org/wikipedia/en/thumb/6/67/2018_FIFA_World_Cup.svg/1200px-2018_FIFA_World_Cup.svg.png")
+
+
+g <- ggplot(osako_gol) +
+  annotate_pitch() +
+  theme_pitch() +
+  theme(text = element_text(family = "Dusha V5")) +
+  coord_flip(xlim = c(55, 112),
+             ylim = c(-1, 101)) +
+  geom_curve(data = cornerkick_data,
+             aes(x = x, y = y, xend = x2, yend = y2),
+             curvature = -0.15, 
+             arrow = arrow(length = unit(0.25, "cm"),
+                             type = "closed")) +
+  geom_segment(aes(x = x, y = y, xend = x2, yend = y2),
+               arrow = arrow(length = unit(0.25, "cm"),
+                             type = "closed")) +
+  geom_label(data = player_label, 
+             aes(x = x, y = y),
+             label = c("Osako", "Honda"), family = "Dusha V5") +
+  geom_point(aes(x = 98, y = 50), size = 3, color = "green") +
+  geom_text(aes(x = 99.7, y = 50), size = 5, label = "???", family = "Dusha V5") +
+  annotate(geom = "text", family = "Dusha V5", 
+           hjust = c(0.5, 0.5, 0.5, 0, 0.5),
+           size = c(6.5, 4.5, 4, 3.5, 3),
+           label = c("Japan             (2) vs. Colombia             (1)",
+                     "Kagawa (PEN 6'), Quintero (39'), Osako (73')",
+                     "Japan press their man advantage, substitute Honda\ndelivers a delicious corner kick for Osako to (somehow) tower over\nColombia's defense and flick a header into the far corner!",
+                     "Bonus: Ospina looking confused and doing\na lil' two-step-or-god-knows-what.",
+                     "by Ryo Nakagawara (@R_by_Ryo)"),
+           x = c(110, 105, 70, 92, 53), 
+           y = c(30, 30, 45, 65, 85)) +
+  ggimage::geom_flag(aes(image = "JP"),       # Japan Flag
+            x = 110, y = 13, size = 0.08) +
+  ggimage::geom_flag(aes(image = "CO"),       # Colombia Flag
+            x = 110, y = 53, size = 0.08) +
+  ggimage::geom_emoji(aes(x = 95, 
+                          y = 50),
+             image = "26bd", size = 0.035) +
+  geom_image(data = wc_logo,                  # World Cup Logo
+             aes(x = x, y = y,
+                 image = image), size = 0.17)
+  
+ggsave(g, filename = "osako_winner.png")
+
+```
+
+
+
+
+## Shots on Target  // Off Target
+
+```{r}
+
+```
+
+
+
+## Formation and line-ups
+
+make function for set formations 
+- all you need to do is pass player names and formation string ("3-5-2", "4-4-2", etc.)
+- later version: player icon with uniform (like in Wikipedia)
+
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+how to get rid of margins????
+
+
+```{r}
+s <- ggplot(pass_data) +
+  annotate_pitch() +
+  geom_segment(aes(x = x, y = y, xend = x2, yend = y2),
+               arrow = arrow(length = unit(0.25, "cm"),
+                             type = "closed")) +
+  geom_segment(data = clearance_data,
+               aes(x = x, y = y, xend = x2, yend = y2
+                   ), linetype = "dashed", size = 0.85) +
+  geom_segment(data = goal_data,
+               aes(x = x, y = y, xend = x2, yend = y2
+                   ), linetype = "dashed", color = "red", size = 0.85) +
+  geom_segment(data = golovin_data,
+               aes(x = x, y = y, xend = x2, yend = y2
+                   ), linetype = "dashed", color = "darkgreen", size = 1.2) +
+  geom_segment(data = zhirkov_data,
+               aes(x = x, y = y, xend = x2, yend = y2
+                   ), linetype = "dashed", color = "darkgreen", size = 1.25) +
+  geom_curve(data = curve_data, 
+             aes(x = x, y = y, xend = x2, yend = y2), 
+             curvature = 0.25, 
+             arrow = arrow(length = unit(0.25, "cm"),
+                             type = "closed")) +
+  geom_image(data = goal_img,
+             aes(x = x, y = y,
+                 image = image), size = 0.035) +
+  theme_pitch() +
+  theme(plot.margin = unit(c(0, 0, 0, 0), "mm")) +
+  coord_flip()
+
+
+ggsave(s, filename = "s.png")
+
+
+
+```
+
+

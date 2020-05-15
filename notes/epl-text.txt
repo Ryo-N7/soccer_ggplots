@@ -1,0 +1,15 @@
+[OC] The Best and/or Busiest Goalkeepers in the Premier League: Alisson doing great. Kepa & Pope doing poorly. Guaita & McCarthy underrated?
+
+- [Short summary of GSAA %](https://i.imgur.com/3MT9TUG.png)
+
+- Liverpool: Alisson = best in the #EPL.
+- Chelsea: Kepa leaking goals from shots he should save.
+- Southampton: McCarthy > Gunn.
+
+- Guaita (#CPFC) having a very good season under the radar (although I think @footballfactman mentioned him on his podcast a while back). 4th in GA per 90, 2nd in GSAA (+5.6) behind Dubravka (on +6.6), and only behind Alisson with 6.7 GSAA %!
+
+- Nick Pope has been woeful for #BurnleyFC with the 3rd worst Save % in the league, given up 8.3 goals from shots an avg. keeper would have been expected to save (league worst), and a -8.9 GSAA %.
+
+- A bit more detail on post-shot xG & Goals Saved Above Average (GSAA): https://statsbomb.com/2018/11/intro-to-goalkeeper-analysis/
+
+- FBref's own primer: https://fbref.com/en/expected-goals-model-explained/

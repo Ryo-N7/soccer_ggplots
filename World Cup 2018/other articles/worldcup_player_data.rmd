@@ -1,0 +1,194 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "June 26, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Download World Cup player data
+
+https://rviews.rstudio.com/2018/06/14/player-data-for-the-2018-fifa-world-cup/
+
+
+## From PDF
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(stringr)
+library(ggplot2)
+library(lubridate)
+library(cowplot)
+library(tabulizer)
+
+url <- "https://github.com/davidkane9/wc18/raw/master/fifa_player_list_1.pdf"
+out <- extract_tables(url, output = "data.frame")
+
+
+```
+
+32 element list, one df for each team!
+
+```{r}
+pdf_data <- out %>% 
+  bind_rows() %>% 
+  as_tibble()
+
+glimpse(pdf_data)
+
+pdf_data <- pdf_data %>% 
+  
+  janitor::clean_names() %>% 
+  
+  rename(number = x,
+         position = pos,
+         name = fifa_popular_name) %>% 
+  
+  mutate(
+    team = case_when(
+    team == "Korea Republic" ~ "South Korea",
+    team == "IR Iran" ~ "Iran",
+    TRUE ~ team
+  )) %>% 
+  
+  mutate(
+    birth_date = dmy(birth_date),
+    league = str_sub(club, -4, -2),
+    club = str_sub(club, end = -7),
+    age = interval(birth_date, "2018-06-14") / years(1)
+  )
+
+# check out the str_sub() function
+pdf_data %>% 
+  janitor::clean_names() %>% 
+  select(team, fifa_popular_name, club) %>% 
+  mutate(league = str_sub(club,    # take string from 4 spaces from end to 2 spaces from end!
+                          start = -4, end = -2),
+         club = str_sub(club, end = -7)) # take string from 7 spaces from end only
+
+```
+
+check for errors with `stopifnot()` function!
+
+```{r}
+
+stopifnot(length(unique(pdf_data$Team)) == 32) # 32 teams in total
+
+pdf_data %>% 
+  select(team) %>% 
+  unique() %>% 
+  count()
+
+
+stopifnot(all(range(table(pdf_data$Team)) == 23)) # 23 players per team
+
+pdf_data %>% 
+  select(Team) %>% 
+  table() %>% 
+  range() %>% 
+  all(23) # TRUE!
+
+pdf_data %>% 
+  filter(position == "GK") %>% 
+  group_by(team) %>% 
+  tally() %>% 
+  filter(n != 3) %>% 
+  nrow() == 0         # all teams have 3 GKs
+
+pdf_data %>% 
+  select(position) %>% 
+  filter(position %in% c("GK", "DF", "MF", "FW")) %>% 
+  unique() # each player assigned to valid position
+
+
+
+```
+
+
+
+## From Wikipedia data
+
+```{r}
+library(rvest)
+
+html <- read_html("https://en.wikipedia.org/wiki/2018_FIFA_World_Cup_squads")
+
+country <- html %>% 
+  html_nodes(".mw-parser-output > h3") %>% 
+  html_text() %>% 
+  as_tibble() %>% 
+  slice(1:32)
+
+number <- html %>% 
+  html_nodes("td:nth-child(1)") %>% 
+  html_text() %>% 
+  as.numeric() %>% 
+  na.omit() %>% 
+  .[1:736]
+
+name <- html %>% 
+  html_nodes("th:nth-child(3)") %>% 
+  html_text() %>% 
+  as_tibble() %>% 
+  filter(!str_detect(value, "Player")) %>% 
+  mutate(value = str_remove_all(value, "\\(captain\\)")) %>% 
+  slice(1:736)
+
+caps <- html %>% 
+  html_nodes("td:nth-child(5)") %>% 
+  html_text() %>% 
+  as.numeric() %>% 
+  .[1:736]
+
+wiki_data <- tibble(
+  
+  number = number,
+  name = name$value,
+  team = rep(country$value, each = 23),
+  caps = caps
+  
+)
+
+wc_player_data <- pdf_data %>% 
+  select(-name) %>% 
+  left_join(wiki_data, by = c("team", "number"))
+
+#write.csv(wc_player_data, "data/wc_player_data.csv")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

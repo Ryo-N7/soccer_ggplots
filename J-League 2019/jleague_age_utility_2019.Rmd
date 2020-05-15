@@ -1,0 +1,219 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "2/8/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+# Packages
+```{r, message=FALSE, warning=FALSE}
+pacman::p_load(tidyverse, polite, scales, ggimage, rvest, 
+               glue, extrafont, ggrepel, magick, ggforce)
+loadfonts()
+```
+
+# functions
+
+## add_logo functions
+
+```{r}
+add_logo <- function(plot_path, logo_path, logo_position, logo_scale = 10){
+
+    # Requires magick R Package https://github.com/ropensci/magick
+
+    # Useful error message for logo position
+    if (!logo_position %in% c("top right", "top left", "bottom right", "bottom left")) {
+        stop("Error Message: Uh oh! Logo Position not recognized\n  Try: logo_positon = 'top left', 'top right', 'bottom left', or 'bottom right'")
+    }
+
+    # read in raw images
+    plot <- magick::image_read(plot_path)
+    logo_raw <- magick::image_read(logo_path)
+
+    # get dimensions of plot for scaling
+    plot_height <- magick::image_info(plot)$height
+    plot_width <- magick::image_info(plot)$width
+
+    # default scale to 1/10th width of plot
+    # Can change with logo_scale
+    logo <- magick::image_scale(logo_raw, as.character(plot_width/logo_scale))
+
+    # Get width of logo
+    logo_width <- magick::image_info(logo)$width
+    logo_height <- magick::image_info(logo)$height
+
+    # Set position of logo
+    # Position starts at 0,0 at top left
+    # Using 0.01 for 1% - aesthetic padding
+
+    if (logo_position == "top right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "top left") {
+        x_pos = 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "bottom right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    } else if (logo_position == "bottom left") {
+        x_pos = 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    }
+
+    # Compose the actual overlay
+    magick::image_composite(plot, logo, offset = paste0("+", x_pos, "+", y_pos))
+
+}
+```
+
+## tategaki function
+
+```{r}
+tategaki <- function(x){
+  x <- chartr("ー", "丨", x) # 長音符の処理
+  x <- strsplit(split="", x)
+  sapply(x, paste, collapse="\n")
+}
+
+tategaki_alt <- function(x){
+  x <- stringr::str_replace_all(x, "ー", "丨") # 長音符の処理
+  stringr::str_wrap(x, width = 1)
+}
+```
+
+
+
+
+# FC Tokyo
+
+## scrape Tokyo
+
+```{r}
+session <- bow("https://www.transfermarkt.com/fc-tokyo/leistungsdaten/verein/6631/plus/0?reldata=JAP1%262018")
+
+print(session)
+
+# grab name from photo element instead
+result_name <- scrape(session) %>% 
+  html_nodes("#yw1 .bilderrahmen-fixed") %>% 
+  html_attr("title") 
+
+# grab age
+result_age <- scrape(session) %>% 
+  html_nodes(".posrela+ .zentriert") %>% 
+  html_text()
+
+# grab minutes played in league
+result_mins <- scrape(session) %>% 
+  html_nodes("td.rechts") %>% 
+  html_text()
+```
+
+## clean tokyo
+
+```{r}
+# place each vector into list
+
+resultados <- list(result_name, result_age, result_mins)
+
+col_name <- c("name", "age", "minutes")
+
+# then reduce(cbind) to combine them, set names to cols 
+resultados %>% 
+  reduce(cbind) %>% 
+  as_tibble() %>% 
+  set_names(col_name) -> results_comb
+
+# NOICE.gif
+glimpse(results_comb)
+
+# fix "strings" into proper formats, calculate % of minutes appeared
+tokyo_minutes <- results_comb %>% 
+  mutate(age = as.numeric(age),
+         minutes = minutes %>% 
+           str_replace("\\.", "") %>% 
+           str_replace("'", "") %>% 
+           as.numeric(),
+         min_perc = (minutes / 3060) %>% round(digits = 3)) %>% 
+  filter(!is.na(minutes)) %>% 
+  separate(name, into = c("first_name", "last_name"), 
+           sep = " ", fill = "left") %>%
+  arrange(desc(min_perc))
+
+# rectanglular highlight for players in their prime:
+rect_df <- data.frame(
+  xmin = 26, xmax = 30,
+  ymin = -Inf, ymax = Inf
+)
+
+glimpse(tokyo_minutes)
+```
+
+## plot Tokyo
+
+```{r fig.height=8, fig.width=10}
+tokyo_minutes %>% 
+  ggplot(aes(x = age, y = min_perc)) +
+  geom_vline(xintercept = 25, alpha = 0.4, color = "grey20") +
+  geom_hline(yintercept = 0.5, alpha = 0.4, color = "grey20") +
+  geom_mark_rect(aes(filter = age >= 26 & age <= 30), 
+                 description = "ピーク年齢*", con.cap = 0,
+                 color = NA, fill = "#271672", alpha = 0.5) + 
+  geom_point(color = "#DD2220", size = 2.5) +
+  geom_text_repel(
+    aes(label = last_name, family = "Roboto Condensed"),
+    nudge_x = 0.5,
+    seed = 6) + 
+  scale_y_continuous(
+    expand = c(0.01, 0),
+    limits = c(0, 1), 
+    labels = percent_format()) +
+  scale_x_continuous(
+    breaks = pretty_breaks(n = 5)) +
+  labs(
+    x = "年齢", 
+    y = tategaki_alt("出場時間 (%)"),  
+    title = "FC東京: 年齢-出場時間プロット",
+    subtitle = "J-League 2018 Season (100% = 3060分)",
+    caption = glue("
+                   データ: transfermarkt.com
+                   作: @R_by_Ryo")) +
+  theme_bw() +
+  theme(
+    text = element_text(family = "Roboto Condensed"),
+    panel.border = element_rect(color = "#271672", size = 1.25),
+    plot.title = element_text(color = "#271672", size = 16, face = "bold"),
+    plot.subtitle = element_text(color = "#DD2220", size = 14),
+    axis.title.y = element_text(angle = 0, vjust= 0.5),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12)) -> fctokyo_plot
+
+fctokyo_plot
+```
+
+```{r}
+ggsave(plot = fctokyo_plot, "../J-League 2018/output/fctokyo_plot.png",
+       height = 6, width = 8)
+```
+
+
+
+```{r}
+plot_logo <- add_logo(plot_path = "../J-League 2018/output/fctokyo_plot.png",
+                      logo_path = "https://upload.wikimedia.org/wikipedia/en/4/45/FCTokyo.png",
+                      logo_position = "top right",
+                      logo_scale = 18)
+
+plot_logo
+```
+
+```{r}
+image_write(image = plot_logo, "../J-League 2018/output/fctokyo_logo_plot.png")
+```
+

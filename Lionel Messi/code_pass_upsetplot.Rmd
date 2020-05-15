@@ -1,0 +1,777 @@
+---
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.height=6, fig.width=8)
+```
+
+# Packages
+
+```{r, message=FALSE, warning=FALSE}
+pacman::p_load(dplyr, stringr, tidyr, purrr, forcats, ggplot2,
+               StatsBombR, #soccermatics, SBpitch, ggsoccer,
+               #rlang, 
+               extrafont, ggupset)
+loadfonts(quiet = TRUE)
+```
+
+
+```{r}
+comps <- FreeCompetitions()
+
+#glimpse(comps)
+```
+
+# Raw data
+
+```{r}
+messi_matches_raw <- comps %>% 
+  filter(competition_id ==11) %>% 
+  FreeMatches()
+
+messi_data_raw <- StatsBombFreeEvents(MatchesDF = messi_matches_raw)
+
+#glimpse(messi_data_raw)
+```
+
+# Save raw
+
+```{r}
+saveRDS(messi_data_raw, file = here::here("data/messi_data_raw.RDS"))
+messi_data_raw <- readRDS(file = here::here("data/messi_data_raw.RDS"))
+```
+
+
+# Clean all + add season labels
+
+```{r}
+messi_data_clean <- messi_data_raw %>% 
+  allclean() %>%  ## cleanlocations, goalkeeper, shot, freezeframe, defensive
+  left_join(comps %>% select(season_id, season_name), by = "season_id")
+```
+
+# Check
+
+```{r}
+#glimpse(messi_data_clean)
+```
+
+
+## Barca player names
+
+```{r}
+messi_data_clean %>% 
+  filter(team.name == "Barcelona") %>% 
+  select(player.name, player.id) %>% unique()
+```
+
+Messi: 5503
+
+```{r}
+#JoinPlayerNickName(messi_data_clean)
+## i don't have a username or pwd... 
+```
+
+* manually clean the names...
+* or find a nice list of players and join? 
+* transfermarkt? no matter what list i find dont think it'll be a complete match
+* use {fuzzyjoin} package? join even if ~n differences...
+
+```{r}
+messi_data_clean <- messi_data_clean %>% 
+  ## player name
+  mutate(player.name = case_when(
+    player.name == "Oleguer Presas Renom" ~ "Oleguer",
+    player.name == "Xavier Hernández Creus" ~ "Xavi",
+    player.name == "Carles Puyol i Saforcada" ~ "Carles Puyol",
+    player.name == "Anderson Luís de Souza" ~ "Deco",
+    player.name == "Rafael Márquez Álvarez" ~ "Rafa Márquez",
+    player.name == "Giovanni van Bronckhorst" ~ "Gio v.Bronckhorst",
+    player.name == "Samuel Eto'o Fils" ~ "Samuel Eto'o",
+    player.name == "Víctor Valdés Arribas" ~ "Víctor Valdés",
+    player.name == "Juliano Haus Belletti" ~ "Juliano Belletti",
+    player.name == "Ludovic Giuly" ~ "Ludovic Giuly",
+    player.name == "Andrés Iniesta Luján" ~ "Andrés Iniesta",
+    player.name == "Ronaldo de Assis Moreira" ~ "Ronaldinho",
+    player.name == "Lionel Andrés Messi Cuccittini" ~ "Lionel Messi",
+    player.name == "Fernando Navarro i Corbacho" ~ "Fernando Navarro",
+    player.name == "Sylvio Mendes Campos Junior" ~ "Sylvinho",
+    player.name == "Damià Abella Pérez" ~ "Damià",
+    player.name == "Rubén Iván Martínez Andrade" ~ "Ronaldinho",
+    player.name == "Ronaldo de Assis Moreira" ~ "Rubén",
+    player.name == "Thiago Motta" ~ "Thiago Motta",
+    player.name == "Mark van Bommel" ~ "Mark van Bommel",
+    player.name == "Henrik Larsson" ~ "Henrik Larsson",
+    player.name == "José Edmílson Gomes de Moraes" ~ "Edmílson",
+    player.name == "Gabriel Francisco García de la Torre" ~ "Gabri",
+    player.name == "Santiago Ezquerro Marín" ~ "Santi Ezquerro",
+    player.name == "Maximiliano Gastón López" ~ "Maxi López",
+    player.name == "Gianluca Zambrotta" ~ "Gianluca Zambrotta",
+    player.name == "Eiður Smári Guðjohnsen" ~ "Eiður Guðjohnsen",
+    player.name == "Lilian Thuram" ~ "Lilian Thuram",
+    player.name == "Javier Pedro Saviola Fernández" ~ "Javier Saviola",
+    player.name == "Gnégnéri Yaya Touré" ~ "Yaya Touré",
+    player.name == "Bojan Krkíc Pérez" ~ "Bojan",
+    player.name == "Eric-Sylvain Bilal Abidal" ~ "Eric Abidal",
+    player.name == "Gabriel Alejandro Milito" ~ "Gabriel Milito",
+    player.name == "Giovani dos Santos Ramírez" ~ "Giovani dos Santos",
+    player.name == "Víctor Vázquez Solsona" ~ "Víctor Vázquez",
+    player.name == "Thierry Henry" ~ "Thierry Henry",
+    player.name == "José Manuel Pinto Colorado" ~ "José Manuel Pinto",
+    player.name == "Daniel Alves da Silva" ~ "Dani Alves",
+    player.name == "Sergio Busquets i Burgos" ~ "Sergio Busquets",
+    player.name == "Seydou Kéita" ~ "Seydou Kéita",
+    player.name == "José Martín Cáceres Silva" ~ "Martín Cáceres",
+    player.name == "Gerard Piqué Bernabéu" ~ "Gerard Piqué",
+    player.name == "Aliaksandr Hleb" ~ "Aliaksandr Hleb",
+    player.name == "Pedro Eliezer Rodríguez Ledesma" ~ "Pedro",
+    player.name == "Sergio Rodríguez García" ~ "Rodri",
+    player.name == "Rafael Romero Serrano" ~ "Fali",
+    player.name == "José Manuel Rueda Sampedro" ~ "José Manuel Rueda",
+    player.name == "Zlatan Ibrahimovic" ~ "Zlatan Ibrahimovic",
+    player.name == "Dmytro Chygrynskiy" ~ "Dmytro Chygrynskiy",
+    player.name == "Maxwell Scherrer Cabelino Andrade" ~ "Maxwell",
+    player.name == "Jeffren Isaac Suárez Bermúdez" ~ "Jeffren",
+    player.name == "Víctor Sánchez Mata" ~ "Víctor Sánchez",
+    player.name == "Thiago Alcântara do Nascimento" ~ "Thiago Alcântara",
+    player.name == "David Villa Sánchez" ~ "David Villa",
+    player.name == "Javier Alejandro Mascherano" ~ "Javier Mascherano",
+    player.name == "Andreu Fontàs Prat" ~ "Andreu Fontàs",
+    player.name == "Ibrahim Afellay" ~ "Ibrahim Afellay",
+    player.name == "Manuel Agudo Durán" ~ "Nolito",
+    player.name == "Marc Bartra Aregall" ~ "Marc Bartra",
+    player.name == "Adriano Correia Claro" ~ "Adriano",
+    player.name == "Martín Montoya Torralbo" ~ "Martín Montoya",
+    player.name == "Jonathan dos Santos Ramírez" ~ "Jonathan dos Santos",
+    player.name == "Francesc Fàbregas i Soler" ~ "Cesc Fàbregas",
+    player.name == "Alexis Alejandro Sánchez Sánchez" ~ "Alexis Sánchez",
+    player.name == "Juan Isaac Cuenca López" ~ "Isaac Cuenca",
+    player.name == "Gerard Deulofeu Lázaro" ~ "Gerard Deulofeu",
+    player.name == "Cristian Tello" ~ "Cristian Tello",
+    player.name == "Sergi Roberto Carnicer" ~ "Sergi Roberto",
+    player.name == "Marc Muniesa Martínez" ~ "Marc Muniesa",
+    TRUE ~ player.name
+  )) %>% 
+  ## pass.recipient.name
+  mutate(pass.recipient.name = case_when(
+    pass.recipient.name == "Oleguer Presas Renom" ~ "Oleguer",
+    pass.recipient.name == "Xavier Hernández Creus" ~ "Xavi",
+    pass.recipient.name == "Carles Puyol i Saforcada" ~ "Carles Puyol",
+    pass.recipient.name == "Anderson Luís de Souza" ~ "Deco",
+    pass.recipient.name == "Rafael Márquez Álvarez" ~ "Rafa Márquez",
+    pass.recipient.name == "Giovanni van Bronckhorst" ~ "Gio v.Bronckhorst",
+    pass.recipient.name == "Samuel Eto'o Fils" ~ "Samuel Eto'o",
+    pass.recipient.name == "Víctor Valdés Arribas" ~ "Víctor Valdés",
+    pass.recipient.name == "Juliano Haus Belletti" ~ "Juliano Belletti",
+    pass.recipient.name == "Ludovic Giuly" ~ "Ludovic Giuly",
+    pass.recipient.name == "Andrés Iniesta Luján" ~ "Andrés Iniesta",
+    pass.recipient.name == "Ronaldo de Assis Moreira" ~ "Ronaldinho",
+    pass.recipient.name == "Lionel Andrés Messi Cuccittini" ~ "Lionel Messi",
+    pass.recipient.name == "Fernando Navarro i Corbacho" ~ "Fernando Navarro",
+    pass.recipient.name == "Sylvio Mendes Campos Junior" ~ "Sylvinho",
+    pass.recipient.name == "Damià Abella Pérez" ~ "Damià",
+    pass.recipient.name == "Rubén Iván Martínez Andrade" ~ "Ronaldinho",
+    pass.recipient.name == "Ronaldo de Assis Moreira" ~ "Rubén",
+    pass.recipient.name == "Thiago Motta" ~ "Thiago Motta",
+    pass.recipient.name == "Mark van Bommel" ~ "Mark van Bommel",
+    pass.recipient.name == "Henrik Larsson" ~ "Henrik Larsson",
+    pass.recipient.name == "José Edmílson Gomes de Moraes" ~ "Edmílson",
+    pass.recipient.name == "Gabriel Francisco García de la Torre" ~ "Gabri",
+    pass.recipient.name == "Santiago Ezquerro Marín" ~ "Santi Ezquerro",
+    pass.recipient.name == "Maximiliano Gastón López" ~ "Maxi López",
+    pass.recipient.name == "Gianluca Zambrotta" ~ "Gianluca Zambrotta",
+    pass.recipient.name == "Eiður Smári Guðjohnsen" ~ "Eiður Guðjohnsen",
+    pass.recipient.name == "Lilian Thuram" ~ "Lilian Thuram",
+    pass.recipient.name == "Javier Pedro Saviola Fernández" ~ "Javier Saviola",
+    pass.recipient.name == "Gnégnéri Yaya Touré" ~ "Yaya Touré",
+    pass.recipient.name == "Bojan Krkíc Pérez" ~ "Bojan",
+    pass.recipient.name == "Eric-Sylvain Bilal Abidal" ~ "Eric Abidal",
+    pass.recipient.name == "Gabriel Alejandro Milito" ~ "Gabriel Milito",
+    pass.recipient.name == "Giovani dos Santos Ramírez" ~ "Giovani dos Santos",
+    pass.recipient.name == "Víctor Vázquez Solsona" ~ "Víctor Vázquez",
+    pass.recipient.name == "Thierry Henry" ~ "Thierry Henry",
+    pass.recipient.name == "José Manuel Pinto Colorado" ~ "José Manuel Pinto",
+    pass.recipient.name == "Daniel Alves da Silva" ~ "Dani Alves",
+    pass.recipient.name == "Sergio Busquets i Burgos" ~ "Sergio Busquets",
+    pass.recipient.name == "Seydou Kéita" ~ "Seydou Kéita",
+    pass.recipient.name == "José Martín Cáceres Silva" ~ "Martín Cáceres",
+    pass.recipient.name == "Gerard Piqué Bernabéu" ~ "Gerard Piqué",
+    pass.recipient.name == "Aliaksandr Hleb" ~ "Aliaksandr Hleb",
+    pass.recipient.name == "Pedro Eliezer Rodríguez Ledesma" ~ "Pedro",
+    pass.recipient.name == "Sergio Rodríguez García" ~ "Rodri",
+    pass.recipient.name == "Rafael Romero Serrano" ~ "Fali",
+    pass.recipient.name == "José Manuel Rueda Sampedro" ~ "José Manuel Rueda",
+    pass.recipient.name == "Zlatan Ibrahimovic" ~ "Zlatan Ibrahimovic",
+    pass.recipient.name == "Dmytro Chygrynskiy" ~ "Dmytro Chygrynskiy",
+    pass.recipient.name == "Maxwell Scherrer Cabelino Andrade" ~ "Maxwell",
+    pass.recipient.name == "Jeffren Isaac Suárez Bermúdez" ~ "Jeffren",
+    pass.recipient.name == "Víctor Sánchez Mata" ~ "Víctor Sánchez",
+    pass.recipient.name == "Thiago Alcântara do Nascimento" ~ "Thiago Alcântara",
+    pass.recipient.name == "David Villa Sánchez" ~ "David Villa",
+    pass.recipient.name == "Javier Alejandro Mascherano" ~ "Javier Mascherano",
+    pass.recipient.name == "Andreu Fontàs Prat" ~ "Andreu Fontàs",
+    pass.recipient.name == "Ibrahim Afellay" ~ "Ibrahim Afellay",
+    pass.recipient.name == "Manuel Agudo Durán" ~ "Nolito",
+    pass.recipient.name == "Marc Bartra Aregall" ~ "Marc Bartra",
+    pass.recipient.name == "Adriano Correia Claro" ~ "Adriano",
+    pass.recipient.name == "Martín Montoya Torralbo" ~ "Martín Montoya",
+    pass.recipient.name == "Jonathan dos Santos Ramírez" ~ "Jonathan dos Santos",
+    pass.recipient.name == "Francesc Fàbregas i Soler" ~ "Cesc Fàbregas",
+    pass.recipient.name == "Alexis Alejandro Sánchez Sánchez" ~ "Alexis Sánchez",
+    pass.recipient.name == "Juan Isaac Cuenca López" ~ "Isaac Cuenca",
+    pass.recipient.name == "Gerard Deulofeu Lázaro" ~ "Gerard Deulofeu",
+    pass.recipient.name == "Cristian Tello" ~ "Cristian Tello",
+    pass.recipient.name == "Sergi Roberto Carnicer" ~ "Sergi Roberto",
+    pass.recipient.name == "Marc Muniesa Martínez" ~ "Marc Muniesa",
+    TRUE ~ pass.recipient.name
+  ))
+```
+
+
+# Save clean
+
+```{r}
+saveRDS(messi_data_clean, file = here::here("data/messi_data_clean.RDS"))
+messi_data_clean <- readRDS(file = here::here("data/messi_data_clean.RDS"))
+```
+
+
+# Data: Completed Pass Received - OPEN PLAY (in games where Messi played)
+
+* To do's: make `filter()` for ALL/box/Messi/all-players/etc. part into a function so not repeat the code every time..
+
+## ALL
+
+```{r}
+pass_received_all <- messi_data_clean %>% 
+  mutate(pass.outcome.name = fct_explicit_na(pass.outcome.name, "Complete")) %>%
+  filter(type.name == "Pass",
+         team.name == "Barcelona",
+         pass.outcome.name == "Complete",
+         !play_pattern.name %in% c("From Corner", "From Free Kick",
+                                   "From Throw In")) %>% 
+  select(player.name, pass.recipient.name, 
+         season_id, season_name,
+         position.name, position.id,
+         location.x, location.y,
+         pass.end_location.x, pass.end_location.y,
+         contains("pass")) %>% 
+  group_by(season_name) %>% 
+  add_count(player.name, pass.recipient.name, name = "pass_num") %>% 
+  ungroup() %>% 
+  mutate(player.name = glue::glue("{player.name}: {pass_num}")) %>% 
+  mutate(pass_duo = map2(player.name, pass.recipient.name, ~c(.x, .y))) %>% 
+  select(player.name, pass.recipient.name, pass_num, 
+         season_name, pass_duo)
+```
+
+## ALL - Box
+
+```{r}
+pass_received_all_box <- messi_data_clean %>% 
+  mutate(pass.outcome.name = fct_explicit_na(pass.outcome.name, "Complete")) %>%
+  filter(type.name == "Pass",
+         team.name == "Barcelona",
+         pass.outcome.name == "Complete",
+         !play_pattern.name %in% c("From Corner", "From Free Kick",
+                                   "From Throw In"),
+         pass.end_location.x >= 102 & pass.end_location.y <= 62 &
+           pass.end_location.y >= 18) %>% 
+  select(player.name, pass.recipient.name, 
+         season_id, season_name,
+         position.name, position.id,
+         location.x, location.y,
+         pass.end_location.x, pass.end_location.y,
+         contains("pass")) %>% 
+  group_by(season_name) %>% 
+  add_count(player.name, pass.recipient.name, name = "pass_num") %>% 
+  ungroup() %>% 
+  mutate(player.name = glue::glue("{player.name}: {pass_num}")) %>% 
+  mutate(pass_duo = map2(player.name, pass.recipient.name, ~c(.x, .y))) %>% 
+  select(player.name, pass.recipient.name, pass_num, 
+         season_name, pass_duo)
+```
+
+## Messi - Total
+
+```{r}
+messi_pass_received_total <- messi_data_clean %>% 
+  mutate(pass.outcome.name = fct_explicit_na(pass.outcome.name, "Complete")) %>%
+  filter(type.name == "Pass",
+         pass.outcome.name == "Complete",
+         pass.recipient.id == 5503,
+         !play_pattern.name %in% c("From Corner", "From Free Kick",
+                                   "From Throw In")) %>% 
+  select(player.name, pass.recipient.name, 
+         season_id, season_name,
+         position.name, position.id,
+         location.x, location.y,
+         pass.end_location.x, pass.end_location.y,
+         contains("pass")) %>% 
+  group_by(season_name) %>% 
+  add_count(player.name, pass.recipient.name, name = "pass_num") %>% 
+  ungroup() %>% 
+  mutate(player.name = case_when(
+    player.name != "Lionel Messi" ~ 
+      glue::glue("{player.name}: {pass_num}")),
+    pass.recipient.name = "Lionel Messi") %>% 
+  mutate(pass_duo = map2(player.name, pass.recipient.name, ~c(.x, .y))) %>% 
+  select(player.name, pass_num, 
+         season_name, pass_duo)
+```
+
+
+## Messi - Box
+
+```{r}
+messi_pass_received_box <- messi_data_clean %>% 
+  mutate(pass.outcome.name = fct_explicit_na(pass.outcome.name, "Complete")) %>%
+  filter(type.name == "Pass",
+         pass.outcome.name == "Complete",
+         pass.recipient.id == 5503,
+         !play_pattern.name %in% c("From Corner", "From Free Kick",
+                                   "From Throw In"),
+         pass.end_location.x >= 102 & pass.end_location.y <= 62 &
+           pass.end_location.y >= 18) %>% 
+  select(player.name, pass.recipient.name, 
+         season_id, season_name,
+         position.name, position.id,
+         location.x, location.y,
+         pass.end_location.x, pass.end_location.y,
+         contains("pass")) %>% 
+  group_by(season_name) %>% 
+  add_count(player.name, pass.recipient.name, name = "pass_num") %>% 
+  ungroup() %>% 
+  mutate(player.name = case_when(
+    player.name != "Lionel Messi" ~ 
+      glue::glue("{player.name}: {pass_num}")),
+    pass.recipient.name = "Lionel Messi") %>% 
+  mutate(pass_duo = map2(player.name, pass.recipient.name, ~c(.x, .y)))
+```
+
+## ALL - Passer Messi
+
+```{r}
+messi_passer_all <- messi_data_clean %>% 
+  mutate(pass.outcome.name = fct_explicit_na(pass.outcome.name, "Complete")) %>%
+  filter(type.name == "Pass",
+         team.name == "Barcelona",
+         pass.outcome.name == "Complete",
+         !play_pattern.name %in% c("From Corner", "From Free Kick",
+                                   "From Throw In")) %>% 
+  select(player.name, pass.recipient.name, 
+         season_id, season_name,
+         position.name, position.id,
+         location.x, location.y,
+         pass.end_location.x, pass.end_location.y,
+         contains("pass")) %>% 
+  group_by(season_name) %>% 
+  add_count(player.name, pass.recipient.name, name = "pass_num") %>% 
+  ungroup() %>% 
+  filter(player.name == "Lionel Messi") %>% 
+  mutate(player.name = glue::glue("{player.name}: {pass_num}")) %>% 
+  mutate(pass_duo = map2(player.name, pass.recipient.name, ~c(.x, .y))) %>% 
+  select(player.name, pass.recipient.name, pass_num, 
+         season_name, pass_duo)
+```
+
+## Box - Passer Messi
+
+```{r}
+messi_passer_box <- messi_data_clean %>% 
+  mutate(pass.outcome.name = fct_explicit_na(pass.outcome.name, "Complete")) %>%
+  filter(type.name == "Pass",
+         team.name == "Barcelona",
+         pass.outcome.name == "Complete",
+         !play_pattern.name %in% c("From Corner", "From Free Kick",
+                                   "From Throw In"),
+         pass.end_location.x >= 102 & pass.end_location.y <= 62 &
+           pass.end_location.y >= 18) %>% 
+  select(player.name, pass.recipient.name, 
+         season_id, season_name,
+         position.name, position.id,
+         location.x, location.y,
+         pass.end_location.x, pass.end_location.y,
+         contains("pass")) %>% 
+  group_by(season_name) %>% 
+  add_count(player.name, pass.recipient.name, name = "pass_num") %>% 
+  ungroup() %>% 
+  filter(player.name == "Lionel Messi") %>% 
+  mutate(player.name = glue::glue("{player.name}: {pass_num}")) %>% 
+  mutate(pass_duo = map2(player.name, pass.recipient.name, ~c(.x, .y))) %>% 
+  select(player.name, pass.recipient.name, pass_num, 
+         season_name, pass_duo)
+```
+
+
+# Upset Plots with {ggupset} package
+
+* Only showing one plot for each type to save space, if want to see combinations of all seasons + pass type go to `soccer_ggplots/Lionel Messi/messi_pass_upsetplots.RMD` (note: not very clean...) or modify the code yourself.
+* 'Name: Number' == PASSER! 'No Number' == Pass Receiver
+* nest by seasons and `map()` ggplot code so not have to repeat ggplot2 code for each season 
+* `nested_df$plot[[1]]` == 2004/2005 season, `...[[2]]` == 2005/2006, etc.
+* only need to fix scaling or add further theme or text elements as necessary!
+* Would prefer to use lollipop charts instead of bar graphs for this but can't seem to get to work with the upset plot x-axis. Needs some work and may PR to the package later on...
+* If use lollipop charts, lots of "ink"/space saved and use color/fill of lollipop itself to show other variables such as total/avg. xG xA or whatever...
+
+* Data only for games where Messi played!
+* Injury, benched, rested, etc.
+* In certain seasons, Messi was injured a lot! So numbers across seasons may not transfer well in interpretating passes of all the players in the team
+* x-axis label ranked by number of passes (received or given)
+
+```{r}
+messi_data_clean %>% 
+  group_by(season_id, season_name) %>% 
+  select(match_id) %>% unique() %>% count() %>% 
+  ungroup() %>% 
+  mutate(sum = sum(n)) # total matches in dataset
+```
+
+## All (Total passes between all players)
+
+```{r, fig.height=6, fig.width=8}
+all_pass_nested_total <- pass_received_all %>% 
+  group_by(season_name) %>% 
+  nest() %>%
+  mutate(plot = map2(
+    data, season_name,
+    ~ ggplot(data = .x, aes(x = pass_duo)) +
+      geom_bar(fill = "#a70042") + 
+      scale_x_upset(n_intersections = 10,
+                    expand = c(0.01, 0.01)) +
+      scale_y_continuous(expand = c(0.04, 0.04)) +
+      labs(title = glue::glue("Total Completed Passes: All Players ({.y})"),
+           subtitle = "'Name: Number' = Passer, 'No Number' = Pass Receiver",
+           caption = "Source: StatsBomb",
+           x = NULL, y = "Number of Passes") +
+      theme_combmatrix(
+        text = element_text(family = "Roboto Condensed", 
+                            color = "#004c99"),
+        plot.title = element_text(family = "Roboto Condensed", size = 20,
+                                  color = "#a70042"),
+        plot.subtitle = element_text(family = "Roboto Condensed", size = 16,
+                                     color = "#004c99"),
+        axis.title = element_text(family = "Roboto Condensed", size = 14,
+                                  color = "#004c99"), 
+        axis.text.x = element_text(family = "Roboto Condensed", size = 12,
+                                   color = "#004c99"),
+        axis.text.y = element_text(family = "Roboto Condensed", size = 12,
+                                   color = "#004c99"),
+        panel.background = element_rect(fill = "white"),
+        combmatrix.panel.point.size = 4,
+        combmatrix.panel.point.color.fill = "#a70042",
+        combmatrix.panel.line.color = "#a70042",
+        panel.grid = element_line(color = "black"),
+        panel.grid.major.x = element_blank(),
+        axis.ticks = element_blank())))
+
+## 2004/2005
+# all_pass_nested_total$plot[[1]] +
+#   scale_y_continuous(labels = seq(0, 50, by = 10),
+#                      breaks = seq(0, 50, by = 10),
+#                      limits = c(0, 50))
+
+## 2011/2012
+all_pass_nested_total$plot[[8]] +
+  scale_y_continuous(labels = seq(0, 230, by = 50),
+                     breaks = seq(0, 230, by = 50),
+                     limits = c(0, 230))
+```
+
+
+
+## All - Box (Total Completed Passes into the Box between ALL players)
+
+```{r, fig.height=6, fig.width=8}
+all_pass_nested_box <- pass_received_all_box %>% 
+  group_by(season_name) %>% 
+  nest() %>%
+  mutate(plot = map2(
+    data, season_name,
+    ~ ggplot(data = .x, aes(x = pass_duo)) +
+      geom_bar(fill = "#a70042") + 
+      scale_x_upset(n_intersections = 10,
+                    expand = c(0.01, 0.01)) +
+      scale_y_continuous(expand = c(0.04, 0.04)) +
+      labs(title = glue::glue("
+                              Total Completed Passes Into The Box 
+                              Between All Players ({.y})"),
+           subtitle = "'Name: Number' = Passer, 'No Number' = Pass Receiver",
+           caption = "Source: StatsBomb",
+           x = NULL, y = "Number of Passes") +
+      theme_combmatrix(
+        text = element_text(family = "Roboto Condensed", 
+                            color = "#004c99"),
+        plot.title = element_text(family = "Roboto Condensed", size = 20,
+                                  color = "#a70042"),
+        plot.subtitle = element_text(family = "Roboto Condensed", size = 16,
+                                     color = "#004c99"),
+        axis.title = element_text(family = "Roboto Condensed", size = 14,
+                                  color = "#004c99"), 
+        axis.text.x = element_text(family = "Roboto Condensed", size = 12,
+                                   color = "#004c99"),
+        axis.text.y = element_text(family = "Roboto Condensed", size = 12,
+                                   color = "#004c99"),
+        panel.background = element_rect(fill = "white"),
+        combmatrix.panel.point.size = 4,
+        combmatrix.panel.point.color.fill = "#a70042",
+        combmatrix.panel.line.color = "#a70042",
+        panel.grid = element_line(color = "black"),
+        panel.grid.major.x = element_blank(),
+        axis.ticks = element_blank())))
+
+all_pass_nested_box$plot[[8]] +
+  scale_y_continuous(labels = seq(0, 15, by = 5),
+                     breaks = seq(0, 15, by = 5),
+                     limits = c(0, 15))
+```
+
+
+## Messi - Total (Total completed passes to Messi)
+
+```{r, fig.height=6, fig.width=8}
+messi_pass_nested_total <- messi_pass_received_total %>% 
+  group_by(season_name) %>% 
+  nest() %>%
+  mutate(plot = map2(
+    data, season_name,
+    ~ ggplot(data = .x, aes(x = pass_duo)) +
+      geom_bar(fill = "#a70042") + 
+      scale_x_upset(n_intersections = 10,
+                    expand = c(0.01, 0.01)) +
+      scale_y_continuous(expand = c(0.04, 0.04)) +
+      labs(title = glue::glue("Total Completed Passes to Messi ({.y})"),
+           caption = "Source: StatsBomb",
+           x = NULL, y = "Number of Passes") +
+      theme_combmatrix(
+        text = element_text(family = "Roboto Condensed", 
+                            color = "#004c99"),
+        plot.title = element_text(family = "Roboto Condensed", size = 20,
+                                  color = "#a70042"),
+        plot.subtitle = element_text(family = "Roboto Condensed", size = 16,
+                                     color = "#004c99"),
+        axis.title = element_text(family = "Roboto Condensed", size = 14,
+                                  color = "#004c99"), 
+        axis.text.x = element_text(family = "Roboto Condensed", size = 12,
+                                   color = "#004c99"),
+        axis.text.y = element_text(family = "Roboto Condensed", size = 12,
+                                   color = "#004c99"),
+        panel.background = element_rect(fill = "white"),
+        combmatrix.panel.point.size = 4,
+        combmatrix.panel.point.color.fill = "#a70042",
+        combmatrix.panel.line.color = "#a70042",
+        panel.grid = element_line(color = "black"),
+        panel.grid.major.x = element_blank(),
+        axis.ticks = element_blank())))
+
+## 2007/2008
+messi_pass_nested_total$plot[[4]] +
+  scale_y_continuous(labels = seq(0, 180, by = 20),
+                     breaks = seq(0, 180, by = 20),
+                     limits = c(0, 180))
+```
+
+
+## Messi - Box (Total completed passes to Messi in the box)
+
+```{r, fig.height=6, fig.width=8}
+messi_pass_nested_box <- messi_pass_received_box %>% 
+  group_by(season_name) %>% 
+  nest() %>%
+  mutate(plot = map2(
+    data, season_name,
+    ~ ggplot(data = .x, aes(x = pass_duo)) +
+      geom_bar(fill = "#a70042") + 
+      scale_x_upset(n_intersections = 10,
+                    expand = c(0.01, 0.01)) +
+      scale_y_continuous(expand = c(0.04, 0.04)) +
+      labs(title = glue::glue("Passes to Messi in the Box ({.y})"),
+           caption = "Source: StatsBomb",
+           x = NULL, y = "Number of Passes") +
+      theme_combmatrix(
+        text = element_text(family = "Roboto Condensed", 
+                            color = "#004c99"),
+        plot.title = element_text(family = "Roboto Condensed", size = 20,
+                                  color = "#a70042"),
+        plot.subtitle = element_text(family = "Roboto Condensed", size = 16,
+                                     color = "#004c99"),
+        axis.title = element_text(family = "Roboto Condensed", size = 14,
+                                  color = "#004c99"), 
+        axis.text.x = element_text(family = "Roboto Condensed", size = 12,
+                                   color = "#004c99"),
+        axis.text.y = element_text(family = "Roboto Condensed", size = 12,
+                                   color = "#004c99"),
+        panel.background = element_rect(fill = "white"),
+        combmatrix.panel.point.size = 4,
+        combmatrix.panel.point.color.fill = "#a70042",
+        combmatrix.panel.line.color = "#a70042",
+        panel.grid = element_line(color = "black"),
+        panel.grid.major.x = element_blank(),
+        axis.ticks = element_blank())))
+
+messi_pass_nested_box$plot[[8]] +
+  scale_y_continuous(labels = seq(0, 14, by = 2),
+                     breaks = seq(0, 14, by = 2),
+                     limits = c(0, 14))
+```
+
+
+## Messi - Passes Total
+
+```{r}
+messi_passer_nested_all <- messi_passer_all %>% 
+  group_by(season_name) %>% 
+  nest() %>%
+  mutate(plot = map2(
+    data, season_name,
+    ~ ggplot(data = .x, aes(x = pass_duo)) +
+      geom_bar(fill = "#a70042") + 
+      scale_x_upset(n_intersections = 5,
+                    expand = c(0.01, 0.01)) +
+      scale_y_continuous(expand = c(0.04, 0.04)) +
+      labs(title = glue::glue("Messi's Passes ({.y})"),
+           caption = "Source: StatsBomb",
+           x = NULL, y = "Number of Passes") +
+      theme_combmatrix(
+        text = element_text(family = "Roboto Condensed", 
+                            color = "#004c99"),
+        plot.title = element_text(family = "Roboto Condensed", size = 20,
+                                  color = "#a70042"),
+        plot.subtitle = element_text(family = "Roboto Condensed", size = 16,
+                                     color = "#004c99"),
+        axis.title = element_text(family = "Roboto Condensed", size = 14,
+                                  color = "#004c99"), 
+        axis.text.x = element_text(family = "Roboto Condensed", size = 12,
+                                   color = "#004c99"),
+        axis.text.y = element_text(family = "Roboto Condensed", size = 12,
+                                   color = "#004c99"),
+        panel.background = element_rect(fill = "white"),
+        combmatrix.panel.point.size = 4,
+        combmatrix.panel.point.color.fill = "#a70042",
+        combmatrix.panel.line.color = "#a70042",
+        panel.grid = element_line(color = "black"),
+        panel.grid.major.x = element_blank(),
+        axis.ticks = element_blank())))
+
+## 2010/2011
+messi_passer_nested_all$plot[[7]] +
+  scale_y_continuous(labels = seq(0, 225, by = 50),
+                     breaks = seq(0, 225, by = 50),
+                     limits = c(0, 225))
+```
+
+
+## Messi - Passes into the Box
+
+* NO data for 2004/2005 so only 7 levels of seasons
+
+```{r}
+messi_passer_nested_box <- messi_passer_box %>% 
+  group_by(season_name) %>% 
+  nest() %>%
+  mutate(plot = map2(
+    data, season_name,
+    ~ ggplot(data = .x, aes(x = pass_duo)) +
+      geom_bar(fill = "#a70042") + 
+      scale_x_upset(n_intersections = 10,
+                    expand = c(0.01, 0.01)) +
+      scale_y_continuous(expand = c(0.04, 0.04)) +
+      labs(title = glue::glue("Messi's Passes into the Box ({.y})"),
+           caption = "Source: StatsBomb",
+           x = NULL, y = "Number of Passes") +
+      theme_combmatrix(
+        text = element_text(family = "Roboto Condensed", 
+                            color = "#004c99"),
+        plot.title = element_text(family = "Roboto Condensed", size = 20,
+                                  color = "#a70042"),
+        plot.subtitle = element_text(family = "Roboto Condensed", size = 16,
+                                     color = "#004c99"),
+        axis.title = element_text(family = "Roboto Condensed", size = 14,
+                                  color = "#004c99"), 
+        axis.text.x = element_text(family = "Roboto Condensed", size = 12,
+                                   color = "#004c99"),
+        axis.text.y = element_text(family = "Roboto Condensed", size = 12,
+                                   color = "#004c99"),
+        panel.background = element_rect(fill = "white"),
+        combmatrix.panel.point.size = 4,
+        combmatrix.panel.point.color.fill = "#a70042",
+        combmatrix.panel.line.color = "#a70042",
+        panel.grid = element_line(color = "black"),
+        panel.grid.major.x = element_blank(),
+        axis.ticks = element_blank())))
+
+messi_passer_nested_box$plot[[7]] +
+  scale_y_continuous(labels = seq(0, 12, by = 2),
+                     breaks = seq(0, 12, by = 2),
+                     limits = c(0, 12))
+```
+
+## Shot Assist
+
+```{r}
+messi_all_shot_assist <- messi_data_clean %>% 
+  mutate(pass.outcome.name = fct_explicit_na(pass.outcome.name, "Complete")) %>%
+  filter(team.name == "Barcelona",
+         !is.na(pass.shot_assist),
+         !play_pattern.name %in% c("From Corner", "From Free Kick",
+                                   "From Throw In")) %>% 
+  select(player.name, pass.recipient.name, 
+         season_id, season_name,
+         position.name, position.id,
+         location.x, location.y,
+         pass.end_location.x, pass.end_location.y,
+         contains("pass")) %>% 
+  group_by(season_name) %>% 
+  add_count(player.name, pass.recipient.name, name = "pass_num") %>% 
+  ungroup() %>% 
+  mutate(player.name = glue::glue("{player.name}: {pass_num}")) %>% 
+  mutate(pass_duo = map2(player.name, pass.recipient.name, ~c(.x, .y))) %>% 
+  select(player.name, pass.recipient.name, pass_num, 
+         season_name, pass_duo)
+
+messi_nested_all_shot_assist <- messi_all_shot_assist %>% 
+  group_by(season_name) %>% 
+  nest() %>%
+  mutate(plot = map2(
+    data, season_name,
+    ~ ggplot(data = .x, aes(x = pass_duo)) +
+      geom_bar(fill = "#a70042") + 
+      scale_x_upset(n_intersections = 10,
+                    expand = c(0.01, 0.01)) +
+      scale_y_continuous(expand = c(0.04, 0.04)) +
+      labs(title = glue::glue("Shot Assists ({.y})"),
+           subtitle = "'Name: Number' = Passer, 'No Number' = Pass Receiver",
+           caption = "Source: StatsBomb",
+           x = NULL, y = "Number of Passes") +
+      theme_combmatrix(
+        text = element_text(family = "Roboto Condensed", 
+                            color = "#004c99"),
+        plot.title = element_text(family = "Roboto Condensed", size = 20,
+                                  color = "#a70042"),
+        plot.subtitle = element_text(family = "Roboto Condensed", size = 16,
+                                     color = "#004c99"),
+        axis.title = element_text(family = "Roboto Condensed", size = 14,
+                                  color = "#004c99"), 
+        axis.text.x = element_text(family = "Roboto Condensed", size = 12,
+                                   color = "#004c99"),
+        axis.text.y = element_text(family = "Roboto Condensed", size = 12,
+                                   color = "#004c99"),
+        panel.background = element_rect(fill = "white"),
+        combmatrix.panel.point.size = 4,
+        combmatrix.panel.point.color.fill = "#a70042",
+        combmatrix.panel.line.color = "#a70042",
+        panel.grid = element_line(color = "black"),
+        panel.grid.major.x = element_blank(),
+        axis.ticks = element_blank())))
+
+messi_nested_all_shot_assist$plot[[8]] +
+  scale_y_continuous(labels = seq(0, 12, by = 2),
+                     breaks = seq(0, 12, by = 2),
+                     limits = c(0, 12))
+```
+
+
+
+Goal Assist, Shot Assist by Messi, etc. etc...
+

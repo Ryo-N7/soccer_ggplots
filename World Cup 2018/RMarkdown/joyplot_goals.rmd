@@ -1,0 +1,379 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "June 30, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+
+ggjoy plots    minutes goal scored across Group Stages
+
+
+- webscrape: use SelectorGadget this time...! click on the elements you want to scrape, copy CSS Selector into html_nodes(), pass html_text or html_table and save! 
+- reshape: everything in one row of column "value", take regex "^Group" make them new cols, group them up underneath each Group name col 
+- tidy: grab minutes text, clean out apostrophe/player name/(o.g.), separate on '+' fill in 0 for non extra time goals then mutate() then sum() ??? 
+
+what COLOR? 
+
+different color scheme for different group?
+
+check out scico , pomographical, hrbrthemes, wes anderson palettes
+
+
+
+```{r}
+library(rvest)
+library(dplyr)
+
+url <- "https://ja.wikipedia.org/wiki/2018_FIFAワールドカップ"
+
+url %>% 
+  read_html() %>% 
+  html_nodes("tr+ tr span") %>% 
+  html_text()
+
+
+#### actual
+
+url <- "https://en.wikipedia.org/wiki/2018_FIFA_World_Cup"
+
+group_goals <- url %>% 
+  read_html() %>% 
+  html_nodes("#Group_A , #Group_B , #Group_C , #Group_D , #Group_E , #Group_F , #Group_G , #Group_H,  .plainlist small") %>% 
+  html_text() %>% 
+  as_tibble()
+
+# write.csv(group_goals, "group_goals.csv", row.names = FALSE)
+
+"#Group_A , #Group_B , #Group_C , #Group_D , #Group_E , #Group_F , #Group_G , #Group_H, .plainlist small"
+```
+
+
+```{r clean}
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(purrr)
+
+group_goals_raw <- read.csv("group_goals.csv", stringsAsFactors = FALSE)
+
+group_goals <- group_goals_raw %>% 
+  mutate(name = if_else(startsWith(value, "Group"), value, NA_character_)) %>% 
+  fill(name) %>% 
+  filter(value != name)
+
+group_goals %>% 
+  mutate(value = str_replace_all(value, "'", "")) %>% 
+  mutate(value = str_replace_all(value, "\\(([^)]+)\\)", "")) %>% 
+  separate(value, into = c("minute", "extra"), sep = "\\+") %>% 
+  mutate(minute = as.numeric(minute),
+         extra = as.numeric(extra))
+  
+  mutate(sum = if_else(!is.na(extra), ))
+
+
+```
+
+```{r}
+group_goals %>% 
+  mutate(value = str_replace_all(value, "'", "")) %>% 
+  mutate(value = str_replace_all(value, "\\(([^)]+)\\)", ""))
+```
+
+
+
+
+```{r joyplot}
+library(ggridges)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r attempt true}
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(tibble)
+library(purrr)
+library(purrrlyr)
+
+group_goals <- read.csv("group_goals.csv", stringsAsFactors = FALSE)
+
+group_goals <- group_goals %>% rownames_to_column()
+
+group_name <- group_goals %>% select(value) %>% str_extract_all("Group [A-Z]") %>% as_vector()
+
+goal_length <- group_goals %>% 
+  filter(value %in% group_name) %>% 
+  mutate(
+    rowpos = as.numeric(rowname)) %>% 
+  select(-rowname) %>% 
+  rownames_to_column() %>% 
+  mutate(
+    goal_start = rowpos + 1, 
+    goal_end = lead(rowpos) - 1,
+    goal_end = case_when(
+      is.na(goal_end) ~ 130,  # manually set 130 (nrow(group_goals))
+      TRUE ~ goal_end
+    )) %>% 
+  select(-rowpos, -rowname)
+
+1:8 # vector of 1 for each group A-H
+group_goals # object to map the slice() through
+
+
+goal_start
+goal_end
+
+group_goals %>% 
+  slice(goal_length$goal_start[1]:goal_length$goal_end[1]) %>% 
+  mutate(groupname = "Group A")
+
+group_goals %>% 
+  slice(goal_length$goal_start[2]:goal_length$goal_end[2]) %>% 
+  mutate(groupname = "Group B")
+
+group_goals %>% 
+  slice(goal_length$goal_start[3]:goal_length$goal_end[3])
+
+
+goal_start_vec <- goal_length$goal_start
+goal_end_vec <- goal_length$goal_end
+
+group_goals %>% 
+  map(., ~slice(goal_start_vec:goal_end_vec))
+
+group_goals %>% 
+  map(., ~slice(goal_start_vec:goal_end_vec))
+
+```
+
+```{r reproducible}
+# i have webscraped some data taht shows numerical times for a few groups. below is a small sample of what it looks like:
+library(tibble)
+
+df <- tribble(
+  ~value,
+  "group a",
+  1,
+  12,
+  56,
+  17,
+  24,
+  "group b",
+  23,
+  1,
+  5,
+  "group c",
+  76,
+  55,
+  89,
+  2,
+  20,
+  "group d",
+  50,
+  23,
+  44,
+  39
+  
+)
+
+# what i want to end up with is as follows:   
+tribble(
+  ~value, ~name,
+  1,     "group a",
+  12,    "group a",
+  56,    "group a",
+  17,    "group a",
+  24,    "group a",
+  23,    "group b",
+  1,     "group c",
+  5,     "group c"
+  # and so on....
+)
+
+# below are my attempts to tidy this data:
+
+df_rows <- df %>% rownames_to_column()
+
+groups <- df_rows %>% select(value) %>% str_extract_all("group [a-z]") %>% as_vector()
+
+# find the rows where data for certain group begins and ends:
+df_length <- df_rows %>% 
+  filter(value %in% groups) %>% 
+  mutate(
+    rowpos = as.numeric(rowname)) %>% 
+  select(-rowname) %>% 
+  rownames_to_column() %>% 
+  mutate(
+    group_start = rowpos + 1, 
+    group_end = lead(rowpos) - 1,
+    group_end = case_when(
+      is.na(group_end) ~ 21,  # manually fill in the 'end row position' for the last group...
+      TRUE ~ group_end
+    )) %>% 
+  select(-rowpos, -rowname)
+
+# Now, I have the row number for where the data for a specific group starts and ends. Along with the original df with rownames as well.
+# How to mutate() in the group names for the rows specified in "groups".
+
+# This can be done by:
+df_rows %>% 
+  slice(df_length$group_start[1]:df_length$group_end[1]) %>% 
+  mutate(groupname = "Group A")
+
+df_rows %>% 
+  slice(goal_length$goal_start[2]:goal_length$goal_end[2]) %>% 
+  mutate(groupname = "Group B")
+
+# and then i can just rbind() each to get the solution that i showed above but not very efficient... i have many groups!
+
+# Use map() or for loops to iterate for EACH group??   below are my attempts but they don't work...
+
+for (i in seq_along(goal_length$value)) {
+  
+  ggoals[i] <- group_goals %>% 
+    slice(goal_length$goal_start[i]:goal_length$goal_end[i]) %>% 
+    mutate(group = paste0("Group", goal_length$value[i]))
+  
+}
+
+1:8 %>% 
+  map2(.x, group_goals, 
+       ~ slice(goal_length$goal_end[.x]:goal_length$goal_end[.x]))
+```
+
+
+
+
+
+## Solution
+
+```{r solution}
+library(tibble)
+
+df <- tribble(
+  ~value,
+  "group a",
+  1,
+  12,
+  56,
+  17,
+  24,
+  "group b",
+  23,
+  1,
+  5,
+  "group c",
+  76,
+  55,
+  89,
+  2,
+  20,
+  "group d",
+  50,
+  23,
+  44,
+  39
+  
+)
+
+
+glimpse(df)
+
+library(tidyverse)
+
+df %>% 
+  mutate(name = if_else(startsWith(value, "group"), value, NA_character_)) %>% 
+  fill(name) %>% 
+  filter(value != name)
+
+
+# alt
+
+group_rows <- which(startsWith(df$value, "group"))
+group_labels <- df$value[group_rows]
+group_start <- group_rows + 1
+group_end <- c(group_rows[-1] - 1, length(df$value))
+
+
+
+```
+
+
+
+
+
+```{r attempt 1}
+
+for (i in seq_along(goal_length$value)) {
+  
+  ggoals[i] <- group_goals %>% 
+    slice(goal_length$goal_start[i]:goal_length$goal_end[i]) %>% 
+    mutate(group = paste0("Group", goal_length$value[i]))
+  
+}
+
+
+g_rows <- goal_length %>% unite(group_row, goal_start, goal_end, sep = ":")
+
+goal_length %>% spread(value, goal_start, goal_end)
+
+group_goals %>% 
+  slice_rows(.cols = g_rows$group_row)
+
+group_goals %>% 
+  map(1:8, ~slice(goal_length$goal_end[.x]:goal_length$goal_end[.x]))
+
+
+by_slice()
+
+
+1:8 %>% 
+  map2(.x, group_goals, 
+       ~ slice(goal_length$goal_end[.x]:goal_length$goal_end[.x]))
+
+
+goalthing <- list()
+
+
+for (i in seq_along(1:8)) {
+  
+  goalthing[i] <- group_goals %>% 
+    slice(goal_length$goal_end[i]:goal_length$goal_end[i])
+  
+}
+
+group_goals %>% 
+  slice()
+
+
+```
+

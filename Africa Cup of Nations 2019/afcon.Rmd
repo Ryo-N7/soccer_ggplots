@@ -1,0 +1,152 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "6/22/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+pacman::p_load(tidyverse, polite, scales, ggimage, ggforce, ggtextures, DT, 
+               cowplot, rvest, glue, extrafont, ggrepel, magick)
+loadfonts()
+```
+
+
+## AFCON theme
+
+
+```{r}
+theme_afcon <- function(
+  title.size = 24,
+  subtitle.size = 14,
+  caption.size = 8,
+  axis.text.size = 14,
+  axis.text.x.size = 12,
+  axis.text.y.size = 12,
+  axis.title.size = 16,
+  strip.text.size = 18,
+  panel.grid.major.x = element_line(size = 0.5, color = "white"),
+  panel.grid.major.y = element_line(size = 0.5, color = "white"),
+  panel.grid.minor.x = element_blank(),
+  panel.grid.minor.y = element_blank(),
+  axis.ticks = element_line(color = "white")) {
+  ## Theme:
+  theme(text = element_text(family = "Roboto Condensed", color = "white"),
+        plot.title = element_text(family = "Roboto Condensed", face = "bold", 
+                                  size = title.size, color = "yellow"),
+        plot.subtitle = element_text(size = subtitle.size),
+        plot.caption = element_text(size = caption.size),
+        panel.background = element_rect(fill = "#CE1127"),
+        plot.background = element_rect(fill = "#000000"),
+        axis.text = element_text(size = axis.text.size, color = "white"),
+        axis.text.x = element_text(size = axis.text.x.size, color = "white"),
+        axis.text.y = element_text(size = axis.text.y.size, color = "white"),
+        axis.title = element_text(size = axis.title.size),
+        axis.line.x = element_blank(),
+        axis.line.y = element_blank(),
+        panel.grid.major.x = panel.grid.major.x,
+        panel.grid.major.y = panel.grid.major.y,
+        panel.grid.minor.x = panel.grid.minor.x,
+        panel.grid.minor.y = panel.grid.minor.y,
+        strip.text = element_text(color = "yellow", face = "bold", 
+                                  size = strip.text.size, 
+                                  margin = margin(4.4, 4.4, 4.4, 4.4)),
+        strip.background = element_blank(),
+        axis.ticks = axis.ticks
+        )
+}
+```
+
+
+```{r}
+iris %>% 
+  ggplot(aes(Sepal.Width, Sepal.Length)) +
+  geom_point() +
+  labs(title = "balaljld", 
+       subtitle = "lajdl") +
+  theme_afcon()
+```
+
+
+
+## Top Goalscorers
+
+```{r}
+base_url <- "https://en.wikipedia.org/wiki/Africa_Cup_of_Nations_records_and_statistics"
+
+session <- bow(base_url)
+
+afcon_goalscorers_raw <- scrape(session) %>% 
+  html_nodes("table.wikitable:nth-child(9)") %>% 
+  html_table() %>% 
+  flatten_df()
+  
+afcon_goalscorers_raw %>% 
+  slice(1:5) %>% 
+  ggplot(aes(x = Scorers, y = Goals)) +
+  geom_col() +
+  coord_flip() + 
+  theme_afcon()
+```
+
+
+
+
+
+## Tournament wins
+
+2nd place 3rd place? do i seriously have to iterate over every tournament? -_- dios mio...
+
+```{r}
+afcon_champions_raw <- scrape(session) %>% 
+  html_nodes("table.wikitable:nth-child(69)") %>% 
+  html_table() %>% 
+  flatten_df()
+
+afcon_champions_clean <- afcon_champions_raw %>% 
+  janitor::clean_names() %>% 
+  select(-rank) %>% 
+  mutate(team = team %>% str_replace("\\[.*\\]", "")) %>% 
+  arrange(desc(titles))
+```
+
+
+
+
+## Goals per squad
+
+most squads don't have goals scored listed.........!!!!!!!!!!!!!!!!!
+
+```{r}
+squad_url <- "https://en.wikipedia.org/wiki/2019_Africa_Cup_of_Nations_squads"
+
+session <- bow(squad_url)
+
+xpaths <- 1:24 %>% 
+  map(., ~glue("//*[@id='mw-content-text']/div/table[{.x}]"))
+
+squads_df_raw <- scrape(session) %>% 
+  html_node(xpath = '//*[@id="toc"]') %>%  
+  html_text() %>% 
+  str_split("\n") %>% 
+  unlist() %>% 
+  tibble::enframe() %>% 
+  rename(country = value) %>% 
+  filter(str_detect(country, "^[1-6]\\."), !str_detect(country, "Group")) %>% 
+  separate(country, c("group", "delete", "country"), sep = c(1, 3)) %>% 
+  slice(1:24) %>% 
+  mutate(group = LETTERS[as.numeric(group)], 
+         country = str_trim(country), 
+         xpaths = xpaths,
+         squads = map(xpaths, ~ scrape(session) %>% 
+                        html_node(xpath = .x) %>% 
+                        html_table())) %>% 
+  unnest(squads)
+
+saveRDS(squads_df_raw, "../data/afcon_squads_df_raw.RDS")
+```
+

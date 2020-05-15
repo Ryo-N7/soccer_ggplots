@@ -1,0 +1,184 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "November 13, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r message=FALSE}
+library(soccermatics)
+library(StatsBombR)
+library(tidyverse)
+```
+
+```{r}
+comps <- FreeCompetitions()
+
+WC_Matches <- FreeMatches(43)
+
+JPN_Matches <- WC_Matches %>% filter(home_team.home_team_id == 778 | away_team.away_team_id == 778)
+
+jp_sen <- get.matchFree(JPN_Matches[1, ])
+
+# need to clean player.name column due to non-ASCII characters
+jp_col <- readRDS(file = "../data/jp_col.RDS")
+jp_sen <- readRDS(file = "../data/jp_sen.RDS")
+jp_pol <- readRDS(file = "../data/jp_pol.RDS")
+jp_bel <- readRDS(file = "../data/jp_bel.RDS")
+br_cr <- readRDS(file = "../data/br_cr.RDS")
+
+# get all StatsBomb data
+allinfo <- function(df) {
+  lapply(1:nrow(df), function(i) {
+    temp <- get.matchFree(df[i,])
+    Sys.sleep(runif(1, 1, 2)) #be courteous!
+    temp <- cleanlocations(temp)
+    temp <- goalkeeperinfo(temp)
+    temp <- shotinfo(temp)
+    temp <- defensiveinfo(temp)
+    return(temp)
+  }) %>% 
+    plyr::rbind.fill()
+}
+
+jp <- allinfo(jp_sen)
+
+jp_sen %>% cleanlocations() %>% glimpse()
+
+# Pass map (to first substitution)
+jp_sen %>% 
+  cleanlocations() %>% 
+  soccerTransform(method = "statsbomb") %>% 
+  filter(team.name == "Japan") %>% 
+  soccerPassmap(theme = "light")
+
+# Pass Heatmap
+jp_col %>% 
+  cleanlocations() %>% 
+  soccerTransform(method = "statsbomb") %>% 
+  filter(team.name == "Japan", type.name == "Pass") %>% 
+  soccerHeatmap(x = "location.x", y = "location.y")
+
+# Defensive pressure Heatmap
+jp_pol %>% 
+  cleanlocations() %>% 
+  soccerTransform(method = "statsbomb") %>% 
+  filter(team.name == "Japan", type.name == "Pressure") %>% 
+  soccerHeatmap(x = "location.x", y = "location.y",
+                title = "Japan's Defensive Pressure vs. Poland") 
+
+# Avg. Passing/Shooting/etc. position map
+jp_bel %>% 
+  cleanlocations() %>% 
+  soccerTransform(method = "statsbomb") %>% 
+  filter(type.name == "Shot", team.name == "Japan", minute < 80) %>% 
+  soccerPositionMap(id = "player.name", 
+                    x = "location.x", y = "location.y")
+
+# Ball possession
+asdf <- allclean(jp_bel)
+asdf %>% 
+  group_by(team.name) %>% 
+  summarize(pos = sum(TimeInPoss)) %>% 
+  ungroup() %>% 
+  mutate(tot_pos = sum(pos)) %>% 
+  mutate(perc_pos = pos/tot_pos)
+
+
+```
+
+```{r}
+jp_bel %>% 
+  cleanlocations() %>% 
+  soccerTransform(method = "statsbomb") %>% 
+  filter(team.name == "Japan") %>% 
+  soccerPassmap(theme = "light")
+```
+
+
+
+```{r, fig.height=5, fig.width=7}
+# PASS MAP (Complete + Incomplete)
+d3 <- jp_bel %>% 
+  cleanlocations() %>% 
+  soccerTransform(method = "statsbomb") %>% 
+  filter(type.name == "Pass" & team.name == "Japan") %>% 
+  mutate(pass.outcome = as.factor(if_else(is.na(pass.outcome.name), 1, 0)))
+
+soccerPitch(arrow = "r",
+            title = "Japan (vs. Belgium)", 
+            subtitle = "Pass map") +
+  geom_segment(data = d3, aes(x = location.x, xend = pass.end_location.x, y = location.y, 
+                              yend = pass.end_location.y, col = pass.outcome), alpha = 0.75) +
+  geom_point(data = d3, aes(x = location.x, y = location.y, col = pass.outcome), alpha = 0.5) +
+  scale_color_manual(values = c("red", "blue")) +
+  guides(color = FALSE)
+
+```
+
+
+```{r}
+jp_bel <- get.matchFree(JPN_Matches[4, ])
+
+# need to clean player.name column due to non-ASCII characters
+
+jp_sen %>% 
+   cleanlocations() %>% 
+  soccerTransform(method = "statsbomb") %>%
+  mutate(player.name = player.name %>% iconv(from = "UTF-8", to = "ASCII//TRANSLIT")) %>% 
+  filter(player.name == "Yuya Osako") %>% 
+  soccerShotmap(theme = "grey")
+```
+
+
+# Pass map
+
+```{r}
+jp_sen %>% 
+  cleanlocations() %>% 
+  soccerTransform(method = "statsbomb") %>%
+  filter(team.name == "Japan") %>% 
+  soccerPassmap(fill = "lightblue", arrow = "r", theme = "light")
+```
+
+Player path
+
+
+```{r}
+jp_bel %>% 
+  filter(player.name == "Genki Haraguchi") %>% 
+  cleanlocations() %>% 
+  soccerTransform(method = "statsbomb") %>%
+  #slice(1:200) %>% 
+  select(player.name, x = location.x, y = location.y) %>% 
+  soccerPath(id = "player.name")
+```
+
+
+
+
+
+
+```{r}
+BRA_Matches <- WC_Matches %>% filter(home_team.home_team_id == 781 | away_team.away_team_id == 781)
+
+br_cr <- get.matchFree(BRA_Matches[3, ])
+
+# need to clean player.name column due to non-ASCII characters
+
+br_cr %>% 
+  cleanlocations() %>% 
+  soccerTransform(method = "statsbomb") %>%
+  filter(player.name == "Neymar da Silva Santos Junior") %>% 
+  soccerShotmap(theme = "grey")
+```
+
+
+
+

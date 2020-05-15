@@ -1,0 +1,204 @@
+---
+title: "Visualizing the Premier League So Far, Part 1: Overview with xPts Tables and xG Plots"
+always_allow_html: yes
+output: 
+  md_document:
+    variant: markdown_github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load(tidyverse, understatr, 
+               kableExtra, glue)
+```
+
+It's the November International Break and we're around a third of the season through in
+the Premier League. To break the monotony I decided to do a blog post exploring how teams
+are doing so far according to a variety of metrics such as shots, goals, xG, xPts, etc.
+both for and against. For this post specifically I talk about some overall graphs and tables based on xG and xPts. Later parts (Parts 2, 3, etc.) will look much more closely at how teams are doing in every 15 minute interval of games, how they're performing offensively and defensively across different game situations, and more. It may still be a little __early__ to do something like this but I wanted to compare in the future how things were before the hectic holiday schedule set in (and personally, to get more practice writing about this stuff). In any case keep in mind that there's only been __12__ games so far.
+
+Learning from some of my previous soccer-related blog posts ( [Exhibit A](https://ryo-n7.github.io/2019-08-21-visualize-soccer-statsbomb-part-1/), [Exhibit B](https://ryo-n7.github.io/2019-06-18-visualize-copa-america/) ), many of which are lengthier than an `A Song of Ice & Fire` novel, I've decided against
+doing another blog post that is simultaneously an analysis __and__ a R programming
+tutorial. I've elected to post the R code to get the data and create the viz in a
+separate file this time. As always all the data is gathered with R, tidied with the
+{tidyverse}, and the viz are created with {ggplot2} and friends.
+
+**You can follow along with the code: [here](https://gist.github.com/Ryo-N7/e439c5da60bb80c8c9ce646e87149e56)**
+
+Anyways, let get started!
+
+# xPts (Expected Points) Table
+
+Expected points (expected Points, xPts, etc.) are an extension of the expected Goals (xG)
+models you might be familiar with if you've at least touched the surface of footy
+analytics. If you're not familiar with xG then take a quick look at my [Copa
+America](https://ryo-n7.github.io/2019-06-18-visualize-copa-america/)
+blog post or this article from
+[FBref](https://fbref.com/en/expected-goals-model-explained/) for a primer. Given the
+expected goals values each team created during a match, one can take these values and
+simulate it thousands of times to calculate the probabilities that the game will result
+in a win/draw/loss. From these probabilities (match odds) we can convert them into how
+many points (anywhere between 0 and 3) that a team could win given the xG they and their
+opponents accumulated.
+
+```{r echo=FALSE}
+premierleague2019 <- get_league_teams_stats("EPL", 2019)
+
+xpts_table <- premierleague2019 %>% 
+  group_by(team_name) %>% 
+  summarize(xPts = sum(xpts),
+            Points = sum(pts),
+            W = sum(wins),
+            D = sum(draws),
+            L = sum(loses),
+            For = sum(scored),
+            Against = sum(missed),
+            xG = sum(npxG),
+            xGA = sum(npxGA)) %>% 
+  mutate(xPts = round(xPts, digits = 1),
+         xG = round(xG, digits = 1),
+         xGA = round(xGA, digits = 1),
+         GD = For - Against,
+         xGD = xG - xGA) %>% 
+  arrange(-Points, -GD, -For) %>% 
+  mutate(real_rank = row_number(),
+         PD = xPts - Points) %>% 
+  mutate(team_name = glue("{team_name} ({real_rank})")) %>% 
+  arrange(-xPts, -xG, -For) %>% 
+  mutate(rank_diff = real_rank - row_number(),
+         GD_diff = GD - xGD) %>% 
+  select(team_name, real_rank, rank_diff, xPts, Points, PD, 
+         W, D, L, For, Against, GD,
+         xG, xGA, xGD, GD_diff) %>% 
+  select(-real_rank, -rank_diff, -GD_diff)
+
+xpts_table %>% 
+  rename(`Team (Actual Rank)` = team_name) %>% 
+  knitr::kable(format = "html", 
+               caption = "League Table by xPts") %>% 
+  kable_styling(full_width = FALSE,
+                bootstrap_options = c("condensed", "responsive")) %>% 
+  add_header_above(c(" ", "Points" = 3, "Result" = 3, "Goals" = 3,
+                     "Expected Goals" = 3)) %>% 
+  column_spec(1:2, bold = TRUE) %>% 
+  row_spec(1:4, bold = TRUE, color = "white", background = "green") %>% 
+  row_spec(5:17, bold = TRUE, color = "grey", background = "white") %>% 
+  row_spec(18:20, color = "white", background = "red") %>% 
+  add_footnote(label = "All xG values are non-Penalty xG",
+               notation = "symbol")
+```
+
+At the top of the table, City are clearly in the lead and their expected numbers match up
+well with their actual numbers, scoring a whopping 35 goals (pretty close to their 36.1
+xG). Liverpool are over performing their xG by close to 6 goals, scoring 28 from 22.1 xG
+and posting the biggest difference between xPts and actual points (10.1) having gained 34
+points to lead the Premier League table when expected points had them for 23.9 points.
+Meanwhile Chelsea might rue their bad luck/opponent's good finishing ability with having
+conceded a bit over 4 goals compared to their xGA. In terms of xPts per game, City are
+gaining 1.9 xPts per game far ahead of their rivals Chelsea and Liverpool (at 1 and 0.9
+xPts per game respectively).
+
+The __biggest difference__ between a club's real rank and their xPts rank is Everton who
+given their xG might be quite a lot higher up the table than their current lowly 15th
+place in reality. Another struggling club, Watford, could also be quite comfortable in
+mid-table if results have gone the way their xG performance may have merited (especially
+in attack, they've been awful at finishing their chances, only 8 goals from 13.8 xG).
+
+The biggest movers downwards from the actual league table based on xPts are newly
+promoted Sheffield United who tumble down from 5th to 14th. Most of this may stem from
+the fact that they have conceded a lot less goals compared to what their xGA might
+suggest. This difference between xGA and goals conceded should catch up to them
+eventually and although their 5th place position flatters them a bit, in my opinion
+they've been doing well enough that they'll end up in mid-table very comfortably. They
+certainly are an interesting team tactically that you might want to read up on (Edit: As I was typing this blog post StatsBomb came out with [an article regarding the Blades](https://statsbomb.com/2019/11/sheffield-united-are-an-unconventional-success-story/)).
+
+Leicester's actual numbers (29 goals scored, second most in the league), while very good,
+do have to come with the caveat that a lot of their goals scored have come when against
+ten men (13/29 goals or 44%). They are around mid-table in terms of xG per game (see next
+few graphs below) and they have been over performing their xG by a massive 14 goals so we
+would expect the numbers to drop closer to their xG values sometime soon (especially
+Jamie Vardy, who's scored 11 goals from just 4.67 xG according to
+[infogol](https://www.infogol.net/en/blog/analysis/premier-league-2019-20-top-scorer-betting-15112019)). However their good defensive record should keep them in fighting shape
+for the __Champions League spots__ (especially as the other traditionally "top" teams look mediocre this season). If their numbers do start declining it may be an
+interesting analysis to drill deeper to figure out __why__ as the numbers in the above table only give a very broad overview of performance.
+
+# non-Penalty xGD (Expected Goal Difference) & xG per Game
+
+Goal difference as a stat is known to any fan and also used as a tie-breaker for when
+teams have a similar amount of points in a league table. However, as we know from the
+various "expected" stats looking at something like goal difference only looks at the end
+results and not the actual quality of chances a team created/conceded during games. We've
+seen many team score lucky goals and/or concede under very unlucky circumstances so
+looking at a team's expected goal differential can provide a better understanding as to
+which teams are __performing__ well overall (offensively and defensively).
+
+<img src="../assets/2019-11-21-visualize-EPL-part-1_files/xGD_plot_logo.png" style="display: block; margin: auto;" align ="middle" width = "600" />
+
+<img src="../assets/2019-11-21-visualize-EPL-part-1_files/xG_AperGame_plot.png" style="display: block; margin: auto;" align ="middle" width = "700" />
+
+City are well ahead of the pack while Arsenal are about even so far, around 0.015 xGD to
+be more precise. Like in the xPts league table, Everton are doing fairly well despite
+what their actual results might suggest along with Manchester United.
+
+Norwich, Newcastle, and Crystal Palace are the three worst teams mainly due to their
+atrocious attacking numbers. On the defensive side Newcastle and Crystal Palace are
+slightly better (but not by much) while Norwich are leaking chances on their end of the
+pitch. Although the Canaries won praise for their adventurous style at the start of the
+season, a huge injury crisis has brought them to heel having conceded __28__ goals
+(second worst in the league just ahead of fellow strugglers Southampton by 1 goal) from
+23.5 xGA (also worst in the league).
+
+Spurs are in the bottom half on xGD, mainly due to their awful attacking numbers as they
+are __fourth from the bottom__ for xG per game! Their attacking numbers have steadily
+declined compared to two seasons ago and last season's Champions League final run
+slightly masked their poor domestic record since the start of 2019 (11 Wins, 7 Draws, 12
+Losses).
+
+# Match Reports
+
+If you follow me on Twitter you might've seen that I do xG timeline and shot maps for
+certain games. I mainly do one for __Liverpool__ as an ongoing thread that I update every
+match day but I also do them for other games (mainly Bundesliga) that I was able to watch
+on that weekend as well. You can find the Liverpool matchday thread
+[here](https://twitter.com/R_by_Ryo/status/1175774705967452160) and you can find out how
+I create these by checking out my [StatsBomb Messi Data Viz](https://ryo-n7.github.io/2019-08-21-visualize-soccer-statsbomb-part-1/) blog post
+from a few months back.
+
+Here's an example:
+
+<img src="../assets/2019-11-21-visualize-EPL-part-1_files/LivMan_match12_summary_plot.png" style="display: block; margin: auto;" align ="middle" width = "650" />
+
+In recent games I also started taking notes during the match and then posting an edited
+version under the report viz. Basically, a rough bullet-point summary of what I saw, some
+random thoughts, and trying to find patterns among my match notes. Here's an example from
+the Liverpool - City game:
+
+<img src="../assets/2019-11-21-visualize-EPL-part-1_files/lfc-city-notes.PNG" style="display: block; margin: auto;" align ="middle" width = "600" />
+
+It's weird, I've been watching all my life but never bothered taking notes until I
+started doing all this data analysis stuff a year or so ago. The closest I've come before
+was doing some self-analysis on my own footage as well as a school project where I
+did play-by-play commentary on a local game!  It's important to watch and learn from the
+game as well as pouring over the stats so it's a nice weekly exercise for me. 
+
+In terms of tactical stuff (rather than stats) you should check out  
+[spielverlagerung.com](https://spielverlagerung.com/),
+[zonalmarking.net](http://www.zonalmarking.net/), [betweentheposts.net](https://betweentheposts.net/), and many more (the first two were
+sites I used to read occasionally when I was a kid, recommended by one of my coaches I
+think, and recently took up reading again). Of course, there are tons of people on
+Twitter you might want to follow as well (ask me or take a look at the [people I follow](https://twitter.com/R_by_Ryo/following)).
+
+# Conclusion & Preview for Part 2
+
+We are still __only__ 12 games in and with the hectic holiday schedule (especially
+Liverpool with the Club World Cup...) coming up __a lot__ can change in even a month from
+now. This was just a short appetizer for what I have in store for this data that I got
+from [understat.com](https://understat.com/) and I'll be drilling deeper to investigate
+some of the numbers that came up above in the next few blog posts.
+
+As mentioned, the next part will take a look at team stats based on different game
+situations like from open play, free kicks, and corners. Here's a sample (still very much
+a __work-in-progress__):
+
+<img src="../assets/2019-11-21-visualize-EPL-part-1_files/setpiece_draft.PNG"
+style="display: block; margin: auto;" align ="middle" width = "600" />

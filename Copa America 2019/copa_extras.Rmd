@@ -1,0 +1,378 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "6/15/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+
+https://copaamerica.com/es/noticias/a-14-dias-del-inicio-de-la-copa-14-estadisticas-de-la-copa-america
+
+fixture calendar: https://copaamerica.com/static/CA2019-calendar-ESP-1-d78531672f9b0a782f78f96f57acb21c.png
+
+Colores:
+
+https://i.ytimg.com/vi/ByYw8EyMr1E/maxresdefault.jpg
+
+```{r}
+#142052 darknavy
+#7CAE51 light grassy green
+#3E632F dark green
+#FEDB45 yellow gold
+#31359D purple
+#245D98 lightblue
+#012488 deep blue
+#4B9213 med green
+```
+
+
+host nation performance
+- first game results
+
+guest nation performance >>> USA 3rd Place in 2016... also hosts though...
+
+time-difference
+
+how far does each team have to travel??
+- hypothetical scenarios all the way to the final: Brazil, Argentina, Japan??
+- grab names of stadiums then `geocode()`
+- brazil training in teresopolis near Rio before the tournament...
+
+- which leagues have contributed most players? boring bar chart
+-- which team
+-- percentage of players coming from each own nation's team?
+
+- avg. age per position? per team?
+
+- squad numbers and position?
+
+top performers >>> understat   (only for top 5 leagues...)
+-->> percentile rank of select players in similar position?
+- Sh90, KP90, xG, xG90, xA, xA90, xGChain90, xGBuildup90
+
+gt tables: green/yellow/red  ABOVE+BELOW league avg. (at least 30 appearances)
+create radar charts?
+
+```{r, fig.height = 5, fig.width = 8}
+age_position_plot <- squads_df_clean %>% 
+  group_by(position) %>% 
+  mutate(median = median(age)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x = age)) +
+  geom_histogram(fill = "red", binwidth = 1) +
+  geom_vline(aes(xintercept = median), size = 1.2) +
+  labs(x = "Age", y = NULL) +
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme_copaAmerica(title.size = 24,
+                    subtitle.size = 14, 
+                    caption.size = 8,
+                    axis.text.size = 14,
+                    axis.title.size = 16,
+                    strip.text.size = 18,
+                    panel.grid.minor.x = element_line(color = "white"),
+                    panel.grid.minor.y = element_line(color = "white")) +
+  facet_wrap(~position)
+
+age_position_plot
+```
+
+
+## Team Profiles
+
+soccerway
+
+### Argentina
+
+```{r}
+
+```
+
+probable line-up? >>> most common since world cup?
+Goals + assists
+
+### Brazil
+
+```{r}
+url <- "https://us.soccerway.com/teams/brazil/brazil/349/matches/"
+
+session <- bow(url)
+
+matches_links <- scrape(session) %>% 
+  html_nodes(".score a") %>% 
+  html_attr("href") %>% 
+  tail(9)
+
+matches_link_df <- matches_links %>% 
+  tibble::enframe(name = NULL, value = "link") %>% 
+  mutate(link = glue::glue("https://us.soccerway.com{link}"))
+
+one_url <- "https://us.soccerway.com/matches/2018/10/16/world/friendlies/argentina/brazil/2916264/"
+
+## starting eleven
+
+bow(one_url) %>% 
+  scrape() %>% 
+  html_nodes(".right .large-link") %>% 
+  html_text()
+
+bow(one_url) %>% 
+  scrape() %>% 
+  html_nodes(".left .large-link") %>% 
+  html_text()
+
+## home team - away team
+## goal scorers
+## result
+```
+
+probable line-up?
+Goals + assists
+
+- regex shenanigans...
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+### Lionel Messi
+
+```{r}
+messi_data_raw <- understatr::get_player_seasons_stats(2097)
+
+messi_data_clean <- messi_data_raw %>% 
+  filter(year == 2018) %>% 
+  select(-player_id, -year, -team_name, 
+         -position, -yellow, -red)
+```
+
+### Luis Suarez 
+
+
+```{r}
+suarez_data_raw <- understatr::get_player_seasons_stats(2098)
+
+glimpse(suarez_data_raw)
+
+suarez_data_clean <- suarez_data_raw %>% 
+  filter(year == 2018) %>% 
+  select(-player_id, -year, -team_name, 
+         -position, -yellow, -red)
+```
+
+
+```{r}
+comparison_data <- bind_rows(messi_data_clean, suarez_data_clean) %>% 
+  select(-games, -time) %>% 
+  gather(key = "key", value = "value", -player_name) %>% 
+  mutate(key = forcats::as_factor(key) %>% 
+           forcats::fct_relevel(., 
+                                "xG", "goals", "xA", "assists"))
+
+comparison_data %>%
+  ggplot(aes(x = key, y = value, color = player_name)) +
+  geom_point(size = 2) +
+  coord_flip() +
+  labs(title = "Comparison: Messi vs. Suarez") +
+  theme_copaAmerica() +
+  theme(legend.position = "none")
+```
+
+of course when you have a lot of players or players with similar stats then it becomes harder to see and that's where the radar chart can be more appropriate.
+
+
+```{r}
+data <- bind_rows(messi_data_clean, suarez_data_clean) %>% 
+  select(-games, -time) %>% 
+  #mutate_at(vars(-player_name), rescale) %>% 
+  select(1:6) 
+
+Attributes = colnames(data)
+AttNo = length(Attributes)
+
+
+circleFun <- function(center = c(0,0),diameter = 1, npoints = 100){
+    r = diameter / 2
+    tt <- seq(0,2*pi,length.out = npoints)
+    xx <- center[1] + r * cos(tt)
+    yy <- center[2] + r * sin(tt)
+    return(data.frame(x = xx, y = yy))
+}
+
+circle1 <- circleFun(c(0,0),200,npoints = 100)
+circle2 <- circleFun(c(0,0),150,npoints = 100)
+circle3 <- circleFun(c(0,0),100,npoints = 100)
+circle4 <- circleFun(c(0,0),50,npoints = 100)
+
+
+
+
+angle_spilt <- (2*pi) / (AttNo)
+angle_spilt_seq <- seq(0,(2*pi),angle_spilt)
+
+# empty dataframes to catch results 
+LineData <- data.frame(x = numeric, y = numeric, stringsAsFactors = F)
+TitlePositioning <- data.frame(title = character, x = numeric, y = numeric, stringsAsFactors = F)
+
+## create plot background construction data  
+for (i in 1:NCOL(data)) {
+  angle_multiplier <- if(i < NCOL(data)){i}else{1}
+  radians_for_segment <- angle_spilt_seq[i]
+
+  x <- 100 * cos(radians_for_segment)
+  y <- 100 * sin(radians_for_segment)
+  temp <- data.frame(x = x, y = y, stringsAsFactors = F)
+  LineData <- rbind(temp, LineData)
+  
+  x <- 112 * cos(radians_for_segment)
+  y <- 112 * sin(radians_for_segment)
+  title <- colnames(data)[i]
+  temp <- data.frame(title = title, x = x, y = y, stringsAsFactors = F)
+  TitlePositioning <- rbind(temp, TitlePositioning)
+}
+
+## create the value labellings data 
+values <- c(25,50,75)
+radian_for_values <- angle_spilt / 2
+x <- values * cos(radian_for_values)
+y <- values * sin(radian_for_values)
+ValuePositioning <- data.frame(values = values, x = x, y = y, stringsAsFactors = F)
+
+## Add the origin values for the lines 
+LineData$x2 <- 0
+LineData$y2 <- 0
+
+# empty dataframe to catch result 
+polydata <- data.frame(player = character, value = numeric, 
+                       radians = numeric, 
+                       x = numeric, y = numeric, stringsAsFactors = F)
+
+## create polygon data for the players 
+for (i in 1:NCOL(data)) {
+  
+  for (p in 1:NROW(data)) {
+    
+  player2calc <- data[p,]
+  angle_multiplier <- if(i < NCOL(data)){i}else{1}
+  radians_for_segment <- angle_spilt_seq[i]
+  x <- player2calc[i] * cos(radians_for_segment)
+  y <- player2calc[i] * sin(radians_for_segment)
+  player <- rownames(data)[p]
+  temp <- data.frame(player = player, value = player2calc[i], 
+                     radians = radians_for_segment, x = x, y = y, 
+                     stringsAsFactors = F)
+  polydata <- rbind(temp, polydata)
+  }
+}
+
+
+#e data up into player 1 and 2
+playersDB <- unique(polydata$player)
+player1 <- polydata[which(polydata$player == playersDB[1]),]
+player2 <- polydata[which(polydata$player == playersDB[2]),]
+
+## create the title string for player 1
+Player1_title <- gsub('([[:upper:]])', ' \\1', playersDB[1])
+Player1_title <- trimws(Player1_title)
+
+## Create Title Strings for Player 2
+Player2_title <- gsub('([[:upper:]])', ' \\1', playersDB[2])
+Player2_title <- trimws(Player2_title)
+
+require(ggplot2)
+
+
+## Add the radar background
+ggplot() + xlim(c(-120, 120)) + ylim(c(-120, 150)) + 
+## Add circles
+geom_polygon(data = circle1, aes(x=x,y=y),fill = "#F0F0F0", colour = "#969696") + geom_polygon(data = circle2, aes(x=x,y=y),fill = "#FFFFFF", colour = "#d9d9d9") + geom_polygon(data = circle3, aes(x=x,y=y),fill = "#F0F0F0", colour = "#d9d9d9") + geom_polygon(data = circle4, aes(x=x,y=y),fill = "#FFFFFF", colour = "#d9d9d9") +
+## Change the theme to void 
+theme_void() +
+## Add the segment lines and attribute/value titles 
+geom_segment(data=LineData, aes(x = LineData$x, y = LineData$y, xend = LineData$x2, yend = LineData$y2),colour = "#d9d9d9", linetype = "dashed") + 
+annotate("text", x = TitlePositioning$x , y = TitlePositioning$y, label = TitlePositioning$title, size= 2.5) +  
+annotate("text", x = ValuePositioning$x , y = ValuePositioning$y, label = ValuePositioning$values, size= 2.5, colour = "#969696") +
+## Add player 1 data 
+geom_polygon(data = player1, aes(x=x,y=y),fill = "#A30845", colour = "#A30845", alpha = 0.3) + geom_point(data = player1, aes(x = x, y = y),size=0.3, colour= "#A30845") + 
+## Add Chart Title
+annotate("text", x = -110 , y = 130, label = Player1_title, size= 5, colour = "#A30845", family = "Helvetica", fontface = "bold", hjust = 0) + 
+annotate("text", x = 110 , y = 130, label = "FIFA 18 Data", size= 4, colour = "#969696", family = "Helvetica", fontface = "bold", hjust = 1) +
+## Add the player 2 polygon and data points
+geom_polygon(data = player2, aes(x=x,y=y),fill = "#00B20B", colour = "#00B20B", alpha = 0.3) +
+geom_point(data = player2, aes(x = x, y = y),size=0.3, colour= "#00B20B") +
+## Add the titles for player 2
+annotate("text", x = -110 , y = 116, label = Player2_title, size= 5, colour = "#00B20B", family = "Helvetica", fontface = "bold", hjust = 0) + 
+annotate("text", x = -110 , y = 123 , label = "vrs", size= 3, colour = "#969696", family = "Helvetica", hjust = 0)
+```
+
+
+
+
+
+### Brazil's Number 9
+
+```{r}
+comparison_data %>% 
+  filter(player_name %in% c("Roberto Firmino", "Gabriel Jesus")) %>% 
+  mutate(value = value / time * 90)
+  
+```
+
+
+
+```{r, fig.height = 5, fig.width = 8, warning=FALSE, message=FALSE}
+colores <- c("Roberto Firmino" = "red",
+             "Gabriel Jesus" = "lightblue")
+
+comparison_data %>%
+  filter(key != "shots" | key != "key_passes") %>% 
+  filter(player_name %in% c("Roberto Firmino", "Gabriel Jesus")) %>% 
+  #mutate(value = value / time * 90) %>% 
+  ggplot(aes(x = key, y = value, fill = player_name)) +
+  geom_jitter(shape = 21, size = 5, color = "black", width = 0.25, show.legend = FALSE, stroke = 1.1) +
+  coord_flip() +
+  scale_y_continuous(expand = c(0.05, 0.05)) +
+  scale_fill_manual(values = colores, name = "Player") +
+  labs(title = "Comparison: Brazil's Number 9s",
+       x = NULL, y = "Metric") +
+  theme_copaAmerica(title.size = 14,
+                    panel.grid.minor.x = element_line(color = "white")) -> comparison_value
+
+comparison_data %>%
+  filter(key != "shots" | key != "key_passes") %>% 
+  filter(player_name %in% c("Roberto Firmino", "Gabriel Jesus")) %>% 
+  mutate(value = value / time * 90) %>% 
+  ggplot(aes(x = key, y = value, fill = player_name)) +
+  geom_jitter(shape = 21, size = 5, color = "black", width = 0.25, show.legend = FALSE, stroke = 1.1) +
+  coord_flip() +
+  scale_y_continuous(expand = c(0.05, 0.05)) +
+  scale_fill_manual(values = colores, name = "Player") +
+  labs(title = "Comparison: Brazil's Number 9s",
+       x = NULL, y = "Metric per 90",
+       caption = glue::glue("data: understat.com")) +
+  theme_copaAmerica(title.size = 14,
+                    panel.grid.minor.x = element_line(color = "white")) -> comparison_per90
+
+plot_grid(comparison_value, comparison_per90, ncol = 2)
+```
+
+```{r, eval=FALSE, echo=FALSE}
+ggsave(plot = player_contrib_club_plot, filename = here::here("Copa America 2019/output/player_contrib_club_plot.png"),
+       height = 6, width = 8)
+```
+
+

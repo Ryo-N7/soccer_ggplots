@@ -1,0 +1,47 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "June 23, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+- home field / continent advantage? 
+
+
+
+- players playing abroad %
+- top % leagues
+
+- avg. caps per position :: where rely on young? where rely on old?
+- differences across teams / confederations?
+----- world cup winners characteristics???  by confederation / club teams
+
+- world cup uniforms/logo animation
+- Japan vs. OPPONENT side-by-side >>> by each world cup
+- have title above with world cup date + match + score(?)
+- need to combine images to be side-by-side, then morph each combined image from one-to-next!
+
+
+ggjoy plot for goals scored >>> which minute of game?
+
+
+- rtweet worldcup???
+
+6/30-7/1
+japanese version part 1 NEED TO START
+joyplot goals    IN PROGRESS
+post Group A-H   DONE
+uniform gifs     IN PROGRESS
+
+
+create functions for GROUP Standings charts... possible????
+- lots of moving parts needed...
+
+
+- fifa world cup audience report

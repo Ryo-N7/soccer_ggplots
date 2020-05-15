@@ -1,0 +1,483 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "7/9/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## pkgs
+
+```{r, message=FALSE, warning=FALSE}
+library(dplyr)        ## data wrangling
+library(tidyr)        ## data wrangling
+library(purrr)        ## data wrangling and iteration
+library(stringr)      ## data wrangling
+library(rvest)        ## webscraping
+library(polite)       ## webscraping (Github only pkg)
+library(ggplot2)      ## plotting
+library(scales)       ## plotting scales
+library(ggimage)      ## images for flags
+library(ggforce)      ## plotting text labels
+library(cowplot)      ## plotting grid
+library(glue)         ## text
+library(ggrepel)      ## plotting text labels
+library(magick)       ## plotting
+library(ggtextures)   ## soccer ball emoji as geom_col()
+library(extrafont)    ## fonts: Roboto Condensed
+
+loadfonts()
+```
+
+## WWC theme
+
+
+```{r}
+theme_womenWorldCup <- function(
+  title.size = 24,
+  subtitle.size = 14,
+  caption.size = 8,
+  axis.text.size = 14,
+  axis.text.x.size = 12,
+  axis.text.y.size = 12,
+  axis.title.size = 16,
+  strip.text.size = 18,
+  panel.grid.major.x = element_line(size = 0.5, color = "black"),
+  panel.grid.major.y = element_line(size = 0.5, color = "black"),
+  panel.grid.minor.x = element_blank(),
+  panel.grid.minor.y = element_blank(),
+  axis.ticks = element_line(color = "black")) {
+  ## Theme:
+  theme(text = element_text(family = "Roboto Condensed", color = "white"),
+        plot.title = element_text(family = "Roboto Condensed", face = "bold", 
+                                  size = title.size, color = "yellow"),
+        plot.subtitle = element_text(size = subtitle.size),
+        plot.caption = element_text(size = caption.size),
+        panel.background = element_rect(fill = "#009b3a"), # red green
+        plot.background = element_rect(fill = "#002776"),
+        axis.text = element_text(size = axis.text.size, color = "white"),
+        axis.text.x = element_text(size = axis.text.x.size, color = "white"),
+        axis.text.y = element_text(size = axis.text.y.size, color = "white"),
+        axis.title = element_text(size = axis.title.size),
+        axis.line.x = element_blank(),
+        axis.line.y = element_blank(),
+        panel.grid.major.x = panel.grid.major.x,
+        panel.grid.major.y = panel.grid.major.y,
+        panel.grid.minor.x = panel.grid.minor.x,
+        panel.grid.minor.y = panel.grid.minor.y,
+        strip.text = element_text(color = "yellow", face = "bold", 
+                                  size = strip.text.size, 
+                                  margin = margin(4.4, 4.4, 4.4, 4.4)),
+        strip.background = element_blank(),
+        axis.ticks = axis.ticks
+        )
+}
+```
+
+
+
+
+## ONLY 2019 edition
+
+```{r}
+wwc_2019_top_goleadores <- data.frame(
+  player = c("Ellen White", "Alex Morgan", "Megan Rapinoe", 
+           "Sam Kerr", "Marta", "Wendie Renard"),
+  goals = c(6, 6, 6, 5, 4, 4),
+  image = "https://www.emoji.co.uk/files/microsoft-emojis/activity-windows10/8356-soccer-ball.png"
+)
+```
+
+
+
+
+```{r, fig.height = 12, fig.width = 14}
+wwc_2019_top_goleadores_raw_plot <- wwc_2019_top_goleadores %>% 
+  ggplot(aes(x = reorder(player, goals), y = goals,
+             image = image)) +
+  geom_isotype_col(img_width = grid::unit(1, "native"), 
+                   img_height = NULL, ncol = NA, nrow = 1, 
+                   hjust = 0, vjust = 0.5) +
+  geom_text(aes(label = goals, 
+                family = "Roboto Condensed", fontface = "bold"), 
+            size = 11.5, color = "yellow",
+            nudge_y = 0.5) +
+  coord_flip() +
+  scale_y_continuous(breaks = c(0, 2, 4, 6),
+                     expand = c(0, 0.1), 
+                     limits = c(0, 7.5)) +
+  labs(title = "Top Scorers of the 2019 Women's World Cup",
+       subtitle = str_wrap("
+                       Third time there has been a tie for top goalscorer 
+                       and the first time that there has been a three way tie!
+                       Other ties include: 2015 (Carli Lloyd & Celia Sasic 
+                       with 5 goals) & 1999 (Sun Wen & Sissi with 7 goals)", 
+                       width = 80),
+       y = "Number of Goals", x = NULL,
+       caption = glue("
+                      Source: Wikipedia
+                      By @R_by_Ryo")) +
+  theme_womenWorldCup(title.size = 32,
+                    subtitle.size = 22,
+                    caption.size = 16,
+                    axis.text.x.size = 24,
+                    axis.text.y.size = 24,
+                    axis.title.size = 22,
+                    panel.grid.major.x = element_line(size = 0.5, color = "white"),
+                    panel.grid.major.y = element_blank(),
+                    axis.ticks = element_blank())
+
+## Add flags to y-axis:
+axis_image <- axis_canvas(wwc_2019_top_goleadores_raw_plot, axis = 'y') + 
+  draw_image("https://upload.wikimedia.org/wikipedia/en/a/a4/Flag_of_the_United_States.svg", 
+             y = 6.3, scale = 0.8) +
+  draw_image("https://upload.wikimedia.org/wikipedia/en/b/be/Flag_of_England.svg", 
+             y = 5, scale = 0.8) +
+  draw_image("https://upload.wikimedia.org/wikipedia/en/a/a4/Flag_of_the_United_States.svg", 
+             y = 3.75, scale = 0.8) +
+  draw_image("https://upload.wikimedia.org/wikipedia/commons/8/88/Flag_of_Australia_%28converted%29.svg", 
+             y = 2.55, scale = 0.8) +
+  draw_image("https://upload.wikimedia.org/wikipedia/en/c/c3/Flag_of_France.svg", 
+             y = 1.35, scale = 0.8) +
+  draw_image("https://upload.wikimedia.org/wikipedia/en/0/05/Flag_of_Brazil.svg", 
+             y = 0.1, scale = 0.8) 
+
+wwc_2019_top_goleadores_plot <- ggdraw(insert_yaxis_grob(
+  wwc_2019_top_goleadores_raw_plot, 
+  axis_image, position = "left"))
+
+wwc_2019_top_goleadores_plot
+```
+
+```{r}
+ggsave(filename = here::here("Women's World Cup 2019/output/wwc2019_top_scorers.png"),
+       height = 12, width = 14)
+```
+
+
+
+## ALL Women's World Cups
+
+
+
+```{r}
+url <- "https://en.wikipedia.org/wiki/List_of_FIFA_Women%27s_World_Cup_goalscorers"
+
+session <- bow(url)
+
+wwc_top_scorers <- scrape(session) %>% 
+  html_nodes("table.wikitable:nth-child(8)") %>% 
+  html_table() %>% 
+  flatten_df() %>% 
+  set_names(c("rank", "player", "country", "goals", 
+              "matches", "goal_avg", "tournaments_played")) %>% 
+  mutate(image = "https://www.emoji.co.uk/files/microsoft-emojis/activity-windows10/8356-soccer-ball.png")
+```
+
+
+```{r, fig.height = 10, fig.width = 12}
+wwc_top_scorers_raw_plot <- wwc_top_scorers %>% 
+  head(5) %>% 
+  ggplot(aes(x = reorder(player, goals), y = goals,
+             image = image)) +
+  geom_isotype_col(img_width = grid::unit(1, "native"), 
+                   img_height = NULL, ncol = NA, nrow = 1, 
+                   hjust = 0, vjust = 0.5) +
+  geom_text(aes(label = goals, 
+                family = "Roboto Condensed", fontface = "bold"), 
+            size = 9.5, color = "yellow",
+            nudge_y = 0.5) +
+  coord_flip() +
+  scale_y_continuous(breaks = c(0, 2, 4, 6, 8, 10, 12, 14, 16, 18),
+                     expand = c(0, 0), 
+                     limits = c(0, 20)) +
+  labs(title = "Top Scorers of the Women's World Cup (1991-2019)",
+       subtitle = glue("
+                       Most goals in a single tournament: 10 
+                       Michelle Akers (1991)"),
+       y = "Number of Goals", x = NULL,
+       caption = glue("
+                      Source: Wikipedia
+                      By @R_by_Ryo")) +
+  theme_womenWorldCup(title.size = 28,
+                    subtitle.size = 20,
+                    caption.size = 16,
+                    axis.text.x.size = 24,
+                    axis.text.y.size = 24,
+                    axis.title.size = 18,
+                    panel.grid.major.x = element_line(size = 0.5, color = "white"),
+                    panel.grid.major.y = element_blank(),
+                    axis.ticks = element_blank())
+
+## Add flags to y-axis:
+axis_image <- axis_canvas(wwc_top_scorers_raw_plot, axis = 'y') + 
+  draw_image("https://upload.wikimedia.org/wikipedia/en/0/05/Flag_of_Brazil.svg", 
+             y = 17, scale = 1.8) +
+  draw_image("https://upload.wikimedia.org/wikipedia/en/b/ba/Flag_of_Germany.svg", 
+             y = 13.25, scale = 1.8) +
+  draw_image("https://upload.wikimedia.org/wikipedia/en/a/a4/Flag_of_the_United_States.svg", 
+             y = 9.3, scale = 1.8) +
+  draw_image("https://upload.wikimedia.org/wikipedia/en/a/a4/Flag_of_the_United_States.svg", 
+             y = 5.35, scale = 1.8) +
+  draw_image("https://upload.wikimedia.org/wikipedia/commons/f/fa/Flag_of_the_People%27s_Republic_of_China.svg", 
+             y = 1.6, scale = 1.8)
+
+wwc_top_scorers_plot <- ggdraw(insert_yaxis_grob(
+  wwc_top_scorers_raw_plot, 
+  axis_image, position = "left"))
+
+wwc_top_scorers_plot
+```
+
+
+```{r}
+ggsave(filename = here::here("Women's World Cup 2019/output/wwc_top_scorers.png"),
+       height = 10, width = 12)
+```
+
+
+## Statsbomb
+
+
+
+```{r, message=FALSE}
+library(soccermatics)
+library(StatsBombR)
+```
+
+
+
+```{r}
+comps <- FreeCompetitions()
+comps %>% 
+  filter(competition_id == 72)
+
+StatsBombR:::MatchesDF
+
+all_free <- StatsBombFreeEvents(MatchesDF = 22961)
+
+wwc_matches <- FreeMatches(Competitions = 72)
+
+wwc_final_id <- wwc_matches %>% filter(match_id == 69321)
+
+wwc_final_raw <- get.matchFree(Match = wwc_final_id)
+
+glimpse(wwc_final_raw)
+```
+
+```{r}
+saveRDS(wwc_final_raw, file = here::here("data/wwc_final_raw.RDS"))
+
+wwc_final_raw <- readRDS(file = here::here("data/wwc_final_raw.RDS"))
+```
+
+
+
+```{r}
+# get all StatsBomb data
+allinfo <- function(df) {
+  lapply(1:nrow(df), function(i) {
+    temp <- get.matchFree(df[i,])
+    Sys.sleep(runif(1, 1, 2)) #be courteous!
+    temp <- cleanlocations(temp)
+    temp <- goalkeeperinfo(temp)
+    temp <- shotinfo(temp)
+    temp <- defensiveinfo(temp)
+    return(temp)
+  }) %>% 
+    plyr::rbind.fill()
+}
+```
+
+
+```{r}
+wwc_final_df <- allinfo(wwc_final_raw)
+
+wwc_final_df %>% cleanlocations() %>% glimpse()
+```
+
+
+
+```{r}
+# Pass map (to first substitution)
+wwc_final_raw %>% 
+  cleanlocations() %>% 
+  soccerTransform(method = "statsbomb") %>% 
+  filter(team.name == "Netherlands Women's") %>% 
+  soccerPassmap(theme = "light")
+
+# Pass map (to first substitution)
+wwc_final_raw %>% 
+  cleanlocations() %>% 
+  soccerTransform(method = "statsbomb") %>% 
+  filter(team.name == "United States Women's") %>% 
+  soccerPassmap(theme = "light")
+
+# Pass Heatmap
+wwc_final_raw %>% 
+  cleanlocations() %>% 
+  soccerTransform(method = "statsbomb") %>% 
+  filter(team.name == "United States Women's", type.name == "Pass") %>% 
+  soccerHeatmap(x = "location.x", y = "location.y")
+```
+
+Netherlands focus on passing centrally through their star midfield trio
+
+Not many balls were able to come through to Miedema and Beerensteyn up top
+
+
+```{r}
+# Defensive pressure Heatmap
+wwc_final_raw %>% 
+  cleanlocations() %>% 
+  soccerTransform(method = "statsbomb") %>% 
+  filter(team.name == "United States Women's", type.name == "Pressure") %>% 
+  soccerHeatmap(x = "location.x", y = "location.y",
+                title = "US Women's Defensive Pressure vs. The Netherlands") 
+
+wwc_final_raw %>% 
+  cleanlocations() %>% 
+  soccerTransform(method = "statsbomb") %>% 
+  filter(team.name == "Netherlands Women's", type.name == "Pressure") %>% 
+  soccerHeatmap(x = "location.x", y = "location.y",
+                title = "The Netherlands Women's Defensive Pressure vs. USA") 
+```
+
+
+## PASS MAP (Complete + Incomplete)
+
+### USA 
+
+
+```{r, fig.height=10, fig.width=16}
+d3 <- wwc_final_raw %>% 
+  cleanlocations() %>% 
+  soccerTransform(method = "statsbomb") %>% 
+  filter(type.name == "Pass" & team.name == "United States Women's") %>% 
+  mutate(pass.outcome = as.factor(if_else(is.na(pass.outcome.name), 
+                                          "Complete", "Incomplete")))
+
+pass_map_neth <- soccerPitch(arrow = "r",
+            title = "USA W (vs. Netherlands W)", 
+            subtitle = "Pass map") +
+  geom_segment(data = d3, aes(x = location.x, xend = pass.end_location.x, 
+                              y = location.y, yend = pass.end_location.y, 
+                              col = pass.outcome), alpha = 0.75) +
+  geom_point(data = d3, aes(x = location.x, y = location.y, 
+                            col = pass.outcome), alpha = 0.5) +
+  scale_color_manual(values = c("blue", "red"), name = "Outcome") +
+  theme(text = element_text(family = "Roboto Condensed"),
+        legend.position = "bottom")
+
+# Pass map (to first substitution)
+usa_passmap <- wwc_final_raw %>% 
+  cleanlocations() %>% 
+  soccerTransform(method = "statsbomb") %>% 
+  filter(team.name == "United States Women's") %>% 
+  soccerPassmap(theme = "light")
+
+
+
+pass_map_text <- ggplot() +
+  annotate(geom = "text", family = "Roboto Condensed",
+           label = str_wrap("USA use the wide areas to attack but most of their crosses into the box were unsucessful. Their big chances (especially after the first goal was scored) came from the times they were able to break through the previously packed Dutch midfield which started to leave gaps as they pushed up to create an equalizer.",
+                            width = 50), size = 6,
+           x = 1, y = 1) +
+  theme_void()
+
+library(patchwork)
+
+usa_passmap / (pass_map_neth + pass_map_text)
+
+
+pass_map_neth + pass_map_text - usa_passmap + plot_layout(ncol = 1)
+```
+
+### Netherlands
+
+
+```{r, fig.height=10, fig.width=16}
+d4 <- wwc_final_raw %>% 
+  cleanlocations() %>% 
+  soccerTransform(method = "statsbomb") %>% 
+  filter(type.name == "Pass" & team.name == "Netherlands Women's") %>% 
+  mutate(pass.outcome = as.factor(if_else(is.na(pass.outcome.name), 
+                                          "Complete", "Incomplete")))
+
+pass_map_ned <- soccerPitch(arrow = "r",
+            title = "Netherlands W (vs. USA W)", 
+            subtitle = "Pass map") +
+  geom_segment(data = d4, aes(x = location.x, xend = pass.end_location.x, 
+                              y = location.y, yend = pass.end_location.y, 
+                              col = pass.outcome), alpha = 0.75) +
+  geom_point(data = d4, aes(x = location.x, y = location.y, 
+                            col = pass.outcome), alpha = 0.5) +
+  scale_color_manual(values = c("blue", "red"), name = "Outcome") +
+  theme(text = element_text(family = "Roboto Condensed"),
+        legend.position = "bottom")
+
+# Pass map (to first substitution)
+holland_passmap <- wwc_final_raw %>% 
+  cleanlocations() %>% 
+  soccerTransform(method = "statsbomb") %>% 
+  filter(team.name == "Netherlands Women's") %>% 
+  soccerPassmap(theme = "light")
+
+
+
+pass_map_text_ned <- ggplot() +
+  annotate(geom = "text", family = "Roboto Condensed",
+           label = str_wrap("The Dutch cycled possession around their midfield three but could not find the creativity to play vertical passes centrally to star Striker Miedema or Berensteyn. Even when they did it was when they dropped very deep into midfield. The Dutch did not complete ANY passes in the USA's 18-yard box!",
+                            width = 50), size = 6,
+           x = 1, y = 1) +
+  theme_void()
+
+library(patchwork)
+
+usa_passmap / (pass_map_neth + pass_map_text)
+
+
+pass_map_ned + pass_map_text_ned - holland_passmap + plot_layout(ncol = 1)
+```
+
+
+
+
+
+
+```{r}
+wwc_final_raw %>% select(type.name) %>% unique()
+
+wwc_final_raw %>% select(player.name) %>% unique()
+```
+
+```{r}
+wwc_final_raw %>% 
+  filter(player.name == "Anouk Dekker", type.name == "Clearance") %>% 
+  count()
+
+
+wwc_final_raw %>% 
+  filter(player.name == "Anouk Dekker", type.name == "Duel") %>% 
+  count()
+
+
+
+wwc_final_raw %>% 
+  filter(player.name == "Stephanie van der Gragt", type.name == "Duel") %>% 
+  count()
+```
+
+
+
+
+```{r}
+wwc_final_raw %>% 
+  allclean() %>% 
+  cleanlocations() %>% 
+  freezeframeinfo()
+```
+

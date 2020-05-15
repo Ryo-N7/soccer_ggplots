@@ -1,0 +1,298 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "August 2, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Liverpool FC Age-Utility Graph
+
+
+```{r}
+library(rvest)
+library(polite)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(scales)
+library(purrr)
+library(stringr)
+library(ggrepel)
+library(glue)
+library(extrafont)
+#loadfonts()
+```
+
+```{r}
+# #NONEOFTHISWORKS
+# CSS Selector .items
+# .items > tbody:nth-child(2)
+# .responsive-table
+# .items > tbody:nth-child(2)
+# #yw1
+# //*[(@id = "yw1")]//td
+# //*[@id="yw1"]/table/tbody
+# tr.odd:nth-child(3) > td:nth-child(2) > table:nth-child(1) > tbody:nth-child(1) > tr:nth-child(1) > td:nth-child(2) > div:nth-child(1) > span:nth-child(1) > a:nth-child(1)
+
+result <- scrape(session) %>% 
+  html_nodes(xpath = '//*[@id="yw1"]/table') %>% 
+  .[[1]] %>% 
+  html_table(fill = TRUE, header = FALSE)
+
+result_name <- scrape(session) %>% 
+  html_nodes("#yw1 .spielprofil_tooltip") %>% 
+  html_attr("title") 
+```
+
+
+
+```{r}
+# first time using "polite" package for responsible web scraping!
+session <- bow("https://www.transfermarkt.com/liverpool-fc/leistungsdaten/verein/31/reldata/GB1%262017/plus/1")
+
+print(session)
+# "The path is scrapable for this user-agent": OK, looks like we are good to go!
+
+# scraping tranfermarkt is a nightmare...
+# scrape each col individually then combine later...
+
+# grab name from photo element instead
+result_name <- scrape(session) %>% 
+  html_nodes("#yw1 .bilderrahmen-fixed") %>% 
+  html_attr("title") 
+
+# grab age
+result_age <- scrape(session) %>% 
+  html_nodes(".posrela+ .zentriert") %>% 
+  html_text()
+
+# grab minutes played in league
+result_mins <- scrape(session) %>% 
+  html_nodes("td.rechts") %>% 
+  html_text()
+
+```
+
+
+# tidy data
+
+```{r}
+# place each vector into list
+
+resultados <- list(result_name, result_age, result_mins)
+
+col_name <- c("name", "age", "minutes")
+
+# then reduce(cbind) to combine them, set names to cols 
+resultados %>% 
+  reduce(cbind) %>% 
+  as_tibble() %>% 
+  set_names(col_name) -> results_comb
+
+# NOICE.gif
+glimpse(results_comb)
+
+age_plus_one <- c("Lovren", "Van Dijk", "Moreno", "Ings")
+
+# fix "strings" into proper formats, calculate % of minutes appeared
+lfc_minutes <- results_comb %>% 
+  
+  mutate(age = as.numeric(age),
+         minutes = minutes %>% 
+           str_replace("\\.", "") %>% 
+           str_replace("'", "") %>% 
+           as.numeric(),
+         min_perc = (minutes / 3420) %>% round(digits = 3)) %>% 
+  
+  filter(!is.na(minutes)) %>% 
+  
+  separate(name, into = c("first_name", "last_name"), by = " ") %>% 
+  
+  # manually fix some names
+  mutate(
+    last_name = case_when(                        
+      first_name == "Trent" ~ "Alexander-Arnold",   
+      first_name == "Virgil" ~ "Van Dijk",
+      first_name == "Alex" ~ "Oxlade-Chamberlain",
+      TRUE ~ last_name),
+    age = age + 1) %>%    # do CURRENT age instead for plot 2.0
+  
+  mutate(
+    age = case_when(
+      last_name %in% age_plus_one ~ age + 1,
+      TRUE ~ age)
+    ) %>% 
+  
+  # can't be arsed to scrape them individually so manually add the new lads
+  add_row(
+    first_name = " ",
+    last_name = "Alisson",
+    age = 25,
+    minutes = 3330,
+    min_perc = 0.974
+  ) %>% 
+  add_row(
+    first_name = " ",
+    last_name = "Fabinho",
+    age = 24,
+    minutes = 3060,
+    min_perc = 0.895
+  ) %>% 
+  add_row(
+    first_name = "Naby",
+    last_name = "Keita",
+    age = 23,
+    minutes = 1966,
+    min_perc = 0.642
+  ) %>% 
+  add_row(
+    first_name = "Xherdan",
+    last_name = "Shaqiri",
+    age = 26,
+    minutes = 3049,
+    min_perc = 0.892
+  ) %>% 
+  
+  # create identifier for new vs. old player for labelling purposes
+  mutate(
+    new_player = case_when(
+      last_name %in% c("Alisson", "Fabinho", "Keita", "Shaqiri") ~ TRUE,
+      TRUE ~ FALSE)) %>% 
+  
+  arrange(desc(min_perc))
+
+# rectanglular highlight for players in their prime:
+rect_df <- data.frame(
+  xmin = 24, xmax = 30,
+  ymin = -Inf, ymax = Inf
+)
+
+# annotations data frame:
+# NOTE: Origi got 9 minutes in before he was loaned out to Wolfsburg
+# NOTE: Woody only got 6 minutes, he would've probably played more if not for injury...
+# NOTE: Naby, Alisson, Fabinho all use minutes from their respective league games
+# Encouraging to see Liverpool buying players in their prime AND regulars in their previous teams
+# Arguably our entire best Starting XI are going to be in their prime coming into this season!
+
+```
+
+
+```{r}
+# theme_liverpool(): based on theme_bw() with red tinges  ... work-in-progress ...
+
+theme_liverpool <- theme(
+  
+  text =              element_text(family = "Georgia"),
+  axis.line =         theme_blank(),
+  axis.text.x =       theme_text(size = base_size * 0.8 , lineheight = 0.9, vjust = 1),
+  axis.text.y =       theme_text(size = base_size * 0.8, lineheight = 0.9, hjust = 1),
+  axis.ticks =        theme_segment(colour = "black", size = 0.2),
+  axis.title.x =      theme_text(size = base_size, vjust = 1),
+  axis.title.y =      theme_text(size = base_size, angle = 90, vjust = 0.5),
+  axis.ticks.length = unit(0.3, "lines"),
+  axis.ticks.margin = unit(0.5, "lines"),
+  
+  legend.background = theme_rect(colour=NA), 
+  legend.key =        theme_rect(colour = "grey80"),
+  legend.key.size =   unit(1.2, "lines"),
+  legend.text =       theme_text(size = base_size * 0.8),
+  legend.title =      theme_text(size = base_size * 0.8, face = "bold", hjust = 0),
+  legend.position =   "right",
+  
+  panel.background =  theme_rect(fill = "white", colour = NA), 
+  panel.border =      theme_rect(fill = NA, colour="grey50"), 
+  panel.grid.major =  theme_line(colour = "grey90", size = 0.2),
+  panel.grid.minor =  theme_line(colour = "grey98", size = 0.5),
+  panel.margin =      unit(0.25, "lines"),
+  
+  strip.background =  theme_rect(fill = "grey80", colour = "grey50"), 
+  strip.text.x =      theme_text(size = base_size * 0.8),
+  strip.text.y =      theme_text(size = base_size * 0.8, angle = -90),
+  
+  plot.background =   theme_rect(colour = NA),
+  plot.title =        theme_text(size = base_size * 1.2),
+  plot.margin =       unit(c(1, 1, 0.5, 0.5), "lines")
+  
+)
+
+```
+
+
+
+```{r fig.height=6, fig.width=8}
+lfc_minutes %>% 
+  ggplot(aes(x = age, y = min_perc)) +
+  geom_rect(
+    data = rect_df, inherit.aes = FALSE,
+    aes(xmin = xmin, xmax = xmax, 
+        ymin = ymin, ymax = ymax),
+    alpha = 0.3,
+    fill = "firebrick1") +
+  geom_point(color = "red", size = 2.5) +
+  geom_text_repel(
+    data = lfc_minutes %>% filter(!new_player == TRUE),
+    aes(label = last_name, family = "Roboto Condensed"),
+    nudge_x = 0.5,
+    seed = 6) + 
+  geom_text_repel(
+    data = lfc_minutes %>% filter(new_player == TRUE),
+    aes(label = last_name, family = "Roboto Condensed", fontface = "bold"), 
+    size = 4, nudge_x = 0.5, nudge_y = 0.02,
+    seed = 8) +
+  scale_y_continuous(
+    expand = c(0.01, 0),
+    limits = c(0, 1), 
+    labels = percent_format()) +
+  scale_x_continuous(
+    breaks = pretty_breaks(n = 10)) +
+  labs(
+    x = "Current Age (As of Aug. 5th, 2018)", y = "% of Minutes Played", 
+    title = "Liverpool FC: Age-Utility Matrix",
+    subtitle = "Premier League 17/18 (Summer 2018 transfers in bold, departed players left in for comparison)",
+    caption = "Data from transfermarkt.com\nInspired by @FinerMargins\nBy @R_by_Ryo") +
+  theme_bw() +
+  theme(
+    text = element_text(family = "Roboto Condensed"),
+    panel.grid.minor.y = element_blank()) +
+  geom_label(
+    aes(x = 20.5, y = 0.87, 
+        hjust = 0.5, 
+        label = glue("
+          Encouraging to see Liverpool buying players both in 
+          their prime and regulars in their previous teams. 
+          Our entire best 'Starting XI' are going to be 
+          in their prime this season!
+          "), 
+        family = "Roboto Condensed"),
+    size = 3.5)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
