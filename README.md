@@ -2,6 +2,10 @@
 
 [Ryo Nakagawara | Twitter: `@R_by_Ryo`](https://twitter.com/R_by_Ryo) [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
+### Web-scrape Soccer Data Tutorial
+
+- [Intro to {polite} Web Scraping of Soccer Data with R!](https://ryo-n7.github.io/2020-05-14-webscrape-soccer-data-with-R/)
+
 ### Video Analyses
 
 - Analyzing Trent Alexander-Arnold <> Andy Robertson cross-field passes: [1](https://i.imgur.com/2PhehaS.png), [2](https://i.imgur.com/3V1W3pu.png), [3](https://i.imgur.com/SibyDsH.png), [4](https://i.imgur.com/wJq1Ojb.png)
