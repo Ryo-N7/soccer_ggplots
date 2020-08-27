@@ -27,6 +27,7 @@
 ### Squad Age Profiles
 
 - [Request thread (Feb. 28, 2020): LFC, Juventus, Barcelona, Arsenal, BVB, & many more requested & done](https://twitter.com/R_by_Ryo/status/1233375468952272898)
+- [Code for grabbing the data from transfermarkt (see 'Intro to {polite} Web Scraping of Soccer Data with R!' blog post above for details)](https://gist.github.com/Ryo-N7/d5b481e1813670f88d67fe40d5295fe4)
 
 ![](https://i.imgur.com/DWMWbf6.png)
 
@@ -84,12 +85,18 @@
 
 ## Progressive Passers: Bundesliga (2019-2020)
 
+* [R Code](https://gist.github.com/Ryo-N7/756a73410c97753284a39260928ea813)
+
 <img src="https://i.imgur.com/21HNfhd.png" width="600"/>
 
 ## xG Match Summary
+
+- [R Code](https://ryo-n7.github.io/2019-08-21-visualize-soccer-statsbomb-part-1/)
 <img src="https://i.imgur.com/K2AMWnG.png" width="600"/>
 
 ## Manchester City players dominate the ‘expected’ stats: np-xG per 90 & xA per 90 for the Premier League (2019-2020)
+
++ [R Code](https://gist.github.com/Ryo-N7/a4b8799328debf335a055d52260f8d03)
 
 <img src="https://i.imgur.com/eaj8iGH.png" width="600"/>
 
