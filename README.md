@@ -10,6 +10,7 @@
 
 - Analyzing Trent Alexander-Arnold <> Andy Robertson cross-field passes: [1](https://i.imgur.com/2PhehaS.png), [2](https://i.imgur.com/3V1W3pu.png), [3](https://i.imgur.com/SibyDsH.png), [4](https://i.imgur.com/wJq1Ojb.png)
 - FC Tokyo's 2nd goal vs. Shimizu S-Pulse (great example of a counterattack): [1](https://i.imgur.com/BC8iMuT.png), [2](https://i.imgur.com/VoZqV0G.png), [3](https://i.imgur.com/2U9CtUP.png), [4](https://i.imgur.com/01yefrE.png)
+- FC Tokyo vs. Kashima Antlers (Aug. 26, 2020): [General match notes](https://twitter.com/R_by_Ryo/status/1298630286603767810), [Tactical breakdown of first conceded goal](https://twitter.com/R_by_Ryo/status/1298934328160739330), [Tactical breakdown of second conceded goal](https://twitter.com/R_by_Ryo/status/1298934884199575552)
 
 ### Liverpool FC: xG Timelines, xG Shot Maps, & Match Notes/Thoughts
 
