@@ -1,0 +1,337 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "1/14/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Packages
+
+```{r message=FALSE}
+# pacman::p_load()
+library(rvest)
+library(polite)
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(ggplot2)
+library(ggtext)
+library(scales)
+library(grid)
+library(gridExtra)
+library(ggimage)
+library(purrr)
+library(stringr)
+library(ggrepel)
+library(ggforce)
+library(patchwork)
+library(glue)
+library(forcats)
+library(tibble)
+library(kableExtra)
+library(knitr)
+library(extrafont)
+loadfonts(quiet = TRUE)
+```
+
+
+# League table
+
+```{r}
+jleague_table_2020_cleaned <- readr::read_csv("https://raw.githubusercontent.com/Ryo-N7/soccer_ggplots/master/data/J-League_2020_review/jleague_table_2020_cleaned.csv")
+
+jleague_table_2020_cleaned %>% 
+  kable(format = "html", 
+               caption = "J.League 2020 Table") %>% 
+  kable_styling(full_width = FALSE,
+                bootstrap_options = c("condensed", "responsive")) %>% 
+  add_header_above(c(" ", "Result" = 4, "Goals" = 3,
+                     "Expected Goals" = 3)) %>% 
+  column_spec(1:2, bold = TRUE) %>% 
+  row_spec(1, bold = TRUE, color = "white", background = "green") %>% 
+  row_spec(2:3, bold = TRUE, color = "grey", background = "lightgreen") %>% 
+  row_spec(4:15, bold = TRUE, color = "grey", background = "white") %>% 
+  row_spec(16:18, color = "white", background = "red") %>% 
+  add_footnote(label = "Data: FBref.com & Football-Lab.jp | Note: No relegation in 2020 season",
+               notation = "none")
+```
+
+
+
+# Goals by Time Interval
+
+```{r}
+interval_goaltimes_all_df <- readr::read_csv("https://raw.githubusercontent.com/Ryo-N7/soccer_ggplots/master/data/J-League_2020_review/interval_goaltimes_all_df_jleague_2020.csv")
+```
+
+
+
+
+## plot function
+
+```{r fig.width=20, fig.height=16}
+# blue: #005AB5
+# red: #DC3220
+
+create_time_goals_plot <- function(df = interval_goaltimes_all_df, 
+                                   team_name = team_name) {
+  team_lab <- team_name
+  team_name <- enquo(team_name)
+  
+  df_filtered <- interval_goaltimes_all_df %>% filter(team_name == !!team_name)
+  
+  ymaxlim <- max(df_filtered$goalFor)
+  
+  ymedmax <- max(df_filtered$mediangolsFor)
+  
+  if (ymedmax > ymaxlim) ymaxlim <- ymedmax
+  
+  shape_legend <- c("League Median Goals Scored" = 1, 
+                    "League Median Goals Conceded" = 4) # 6 2
+  
+  
+  interval_goaltimes <- ggplot(df_filtered,
+                               aes(x = time)) +
+    geom_segment(x = 0, xend = 10, y = 0, yend = 0, size = 0.75) +
+    geom_col(aes(y = goalFor), width = 0.65, color = "#000000", fill = "#005AB5") +
+    geom_col(aes(y = goalAG), width = 0.65, color = "#000000", fill = "#DC3220") +
+    geom_point(aes(y = mediangolsFor, shape = "League Median Goals Scored"), 
+               size = 8, stroke = 3.5) +
+    geom_point(aes(y = mediangolsAgainst, shape = "League Median Goals Conceded"), 
+               size = 8, stroke = 3.5) +
+    scale_y_continuous(breaks = seq(-10, 20, by = 2),
+                       limits = c(NA, ymaxlim + 4)) +
+    scale_shape_manual(values = shape_legend, 
+                       breaks = c("League Median Goals Scored", "League Median Goals Conceded"),
+                       guide = guide_legend(
+                         direction = "horizontal",
+                         title = NULL
+                       )) +
+    labs(x = "Time Intervals", y = "Goals", # : Scored (+) | Conceded (-)
+         title = glue::glue("Goals <b style ='color:#005AB5'>Scored</b> & <b style ='color:#DC3220'>Conceded</b> at 10 Minute Intervals"),
+         subtitle = paste(team_lab, ("J.League 2020")),
+         caption = "Graphic: Ryo Nakagawara | Twitter: @R_by_Ryo | Data: footystats.org") +
+    theme_minimal() +
+    theme(panel.grid.major.x = element_blank(),
+          panel.grid.minor.y = element_blank(),
+          legend.position = c(0.5, 0.9),
+          text = element_text(family = "Roboto Condensed"),
+          plot.title = element_markdown(family = "Roboto Slab", hjust = 0.5, size = 40),
+          plot.subtitle = element_markdown(family = "Roboto Slab", 
+                                           hjust = 0.5, size = 35),
+          plot.caption = element_text(size = 20),
+          legend.text = element_text(size = 25),
+          legend.spacing.x = unit(1.0, 'cm'),
+          axis.title = element_text(size = 30),
+          axis.text = element_text(size = 25))
+  
+  return(interval_goaltimes)
+}
+```
+
+```{r fig.width=20, fig.height=16}
+interval_goaltimes_Frontale <- create_time_goals_plot(df = interval_goaltimes_all_df, team_name = "Kawasaki Frontale")
+
+interval_goaltimes_Frontale
+```
+
+```{r fig.width=20, fig.height=16}
+interval_goaltimes_SPulse <- create_time_goals_plot(df = interval_goaltimes_all_df, team_name = "Shimizu SPulse")
+
+interval_goaltimes_SPulse
+```
+
+Etc...
+
+
+# Goals by Match Situations
+
+
+```{r}
+jleague_2020_situation_all_df <- readr::read_csv("https://raw.githubusercontent.com/Ryo-N7/soccer_ggplots/master/data/J-League_2020_review/jleague_2020_situation_all_df.csv")
+```
+
+
+
+## plot function
+
+```{r fig.height = 22, fig.width=25}
+create_situation_goals_plot <- function(df, team_name) {
+  
+  team_name_f <- enquo(team_name)
+  situation_all_df <- df %>% 
+    filter(team_name == !!team_name_f) %>% 
+    mutate(situation = case_when(
+      situation == "throughball" ~ "Through Ball",
+      situation == "shortpass" ~ "Short Pass",
+      situation == "longpass" ~ "Long Pass",
+      situation == "setpiece_direct" ~ "Set Piece (Direct)", 
+      situation == "setpiece" ~ "Set Piece",
+      situation == "penalty" ~ "Penalty",
+      situation == "other" ~ "Other", 
+      situation == "looseball" ~ "Loose Ball",
+      situation == "dribble" ~ "Dribble",
+      situation == "cross" ~ "Cross",
+      TRUE ~ NA_character_
+    ))
+  
+  ymaxlim <- max(situation_all_df$goals_scored)
+  
+  ymedmax <- max(situation_all_df$goals_against)
+  
+  if (ymedmax > ymaxlim) ymaxlim <- ymedmax
+  
+  shape_legend <- c("League Median Goals Scored" = 21, 
+                    "League Median Goals Conceded" = 4)
+  
+  team_color_score <- "#005AB5"
+  team_color_against <- "#DC3220"
+  
+  ## separate dfs for labels
+  topscore_sitch <- situation_all_df %>% 
+    arrange(desc(goals_scored)) %>% 
+    select(situation) %>% slice(1) %>% pull()
+  
+  topscore_sitch_f <- enquo(topscore_sitch)
+  
+  topdf <- situation_all_df %>% filter(situation == !!topscore_sitch_f)
+  elsedf <- situation_all_df %>% filter(situation != !!topscore_sitch_f)
+  
+  match_sitch_concede_plot <- ggplot(situation_all_df) +
+    ## background col
+    geom_col(aes(x = 25, y = reorder(situation, goals_scored)), 
+             width = 0.5, fill = "#DCDCDC") +
+    ## foreground col
+    ## against
+    geom_col(aes(x = goals_against, y = reorder(situation, goals_scored), 
+                 fill = team_color_against),
+             width = 0.4) +
+    ## for
+    geom_col(aes(x = goals_scored, y = reorder(situation, goals_scored), 
+                 fill = team_color_score),
+             width = 0.25) +
+    ## Text
+    ## Top first row
+    ggtext::geom_rich_text(
+      data = topdf,
+      aes(x = 12.5, y = situation,
+          label = glue::glue("{topdf$goals_scored} <b style='color: #005AB5'>Scored</b> | {topdf$goals_against} <b style='color: #DC3220'>Conceded</b>")), 
+      size = 10, fill = NA, label.color = NA,
+      nudge_y = 0.35, family = "Roboto Condensed") +
+    ## Top other rows
+    ggtext::geom_rich_text(
+      data = elsedf,
+      aes(x = 12.5, y = situation,
+          label = glue::glue("<b style='color: #005AB5'>{elsedf$goals_scored}</b> | <b style='color: #DC3220'>{elsedf$goals_against}</b>")), 
+      size = 10, fill = NA, label.color = NA,
+      nudge_y = 0.35, family = "Roboto Condensed") +
+    ## Bottom first row
+    ggtext::geom_rich_text(
+      data = topdf,
+      aes(x = 12.5, y = situation,
+          label = glue::glue("<b style='color: #005AB5'>{topdf$prop_score * 100}%</b> of Team's Total Goals Scored | <b style='color: #DC3220'>{topdf$prop_against * 100}%</b> of Team's Total Goals Conceded")),
+      size = 10, fill = NA, label.color = NA,
+      nudge_y = -0.35, family = "Roboto Condensed") +
+    ## Bottom other rows
+    ggtext::geom_rich_text(
+      data = elsedf,
+      aes(x = 12.5, y = situation,
+          label = glue::glue("<b style='color: #005AB5'>{elsedf$prop_score * 100}%</b> | <b style='color: #DC3220'>{elsedf$prop_against * 100}%</b>")),
+      size = 10, fill = NA, label.color = NA, 
+      nudge_y = -0.35, family = "Roboto Condensed") +
+    ## League avg. markers
+    geom_point(aes(x = avg_score, y = situation,
+                   shape = "League Median Goals Scored"),
+               stroke = 3.5, 
+               size = 8,
+               color = "#000000") + # color = "#005AB5", fill = "white"
+    geom_point(aes(x = avg_against, y = situation,
+                   shape = "League Median Goals Conceded"),
+               stroke = 3.5, 
+               size = 8,
+               color = "#000000") + # color = "#DC3220", fill = "white"
+    ## Scales
+    scale_color_identity() +
+    scale_fill_identity() +
+    scale_x_continuous(limits = c(-0.5, 25)) +
+    scale_y_discrete(expand = c(0.1, 0.1)) +
+    scale_shape_manual(values = shape_legend, 
+                       breaks = c("League Median Goals Scored", "League Median Goals Conceded"),
+                       guide = guide_legend(
+                         direction = "horizontal",
+                         title = NULL
+                       )) +
+    #facet_wrap(~ team_label) +
+    labs(title = glue::glue("Goals <b style='color: #005AB5'>Scored</b> & <b style='color: #DC3220'>Conceded</b> From Different Match Situations"),
+         subtitle = glue::glue("{team_name} (J.League 2020)"),
+         x = "Number of Goals <b style='color: #005AB5'>Scored</b> or <b style='color: #DC3220'>Conceded</b>", 
+         y = NULL,
+         caption = gt::md("**Graphic**: Ryo Nakagawara (**Twitter**: @R_by_Ryo) | **Data**: Football-Lab.jp")) +
+    theme_minimal() +
+    theme(text = element_text(family = "Roboto Condensed", color = "black"),
+          plot.title = ggtext::element_markdown(size = 43, family = "Roboto Slab", 
+                                                face = "bold", hjust = 0.5),
+          plot.subtitle = element_text(size = 40, family = "Roboto Slab", 
+                                       face = "bold", hjust = 0.5),
+          plot.caption = element_markdown(size = 25),
+          axis.title.x = element_markdown(size = 35, color = "black", family = "Roboto Slab"),
+          axis.title.y = element_markdown(size = 35, color = "black", family = "Roboto Slab"),
+          axis.text = element_markdown(size = 30, color = "black", family = "Roboto Slab"),
+          legend.position = c(0.5, 0.99),
+          legend.text = element_text(size = 30),
+          legend.spacing.x = unit(1.0, 'cm'),
+          panel.grid.minor.x = element_blank(),
+          panel.grid.major.y = element_blank()) +
+    ## Dividers
+    geom_segment(aes(x = 6.25, xend = 18.75,
+                     y = 0.5, yend = 0.5, color = "#000000"),
+                 size = 1.25) +
+    geom_segment(aes(x = 6.25, xend = 18.75,
+                     y = 1.5, yend = 1.5, color = "#000000"),
+                 size = 1.25) +
+    geom_segment(aes(x = 6.25, xend = 18.75,
+                     y = 2.5, yend = 2.5, color = "#000000"),
+                 size = 1.25) +
+    geom_segment(aes(x = 6.25, xend = 18.75,
+                     y = 3.5, yend = 3.5, color = "#000000"),
+                 size = 1.25) +
+    geom_segment(aes(x = 6.25, xend = 18.75,
+                     y = 4.5, yend = 4.5, color = "#000000"),
+                 size = 1.25) +
+    geom_segment(aes(x = 6.25, xend = 18.75,
+                     y = 5.5, yend = 5.5, color = "#000000"),
+                 size = 1.25) +
+    geom_segment(aes(x = 6.25, xend = 18.75,
+                     y = 6.5, yend = 6.5, color = "#000000"),
+                 size = 1.25) +
+    geom_segment(aes(x = 6.25, xend = 18.75,
+                     y = 7.5, yend = 7.5, color = "#000000"),
+                 size = 1.25) +
+    geom_segment(aes(x = 6.25, xend = 18.75,
+                     y = 8.5, yend = 8.5, color = "#000000"),
+                 size = 1.25) +
+    geom_segment(aes(x = 6.25, xend = 18.75,
+                     y = 9.5, yend = 9.5, color = "#000000"),
+                 size = 1.25)
+  
+  return(match_sitch_concede_plot)
+}
+```
+
+
+```{r fig.height = 22, fig.width=25}
+create_situation_goals_plot(df = jleague_2020_situation_all_df, team_name = "FC Tokyo")
+```
+
+
+```{r fig.height = 22, fig.width=25}
+create_situation_goals_plot(df = jleague_2020_situation_all_df, team_name = "Vegalta Sendai")
+```
+
+
+Etc.
+
