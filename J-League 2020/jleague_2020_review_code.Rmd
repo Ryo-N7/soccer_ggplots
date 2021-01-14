@@ -335,3 +335,347 @@ create_situation_goals_plot(df = jleague_2020_situation_all_df, team_name = "Veg
 
 Etc.
 
+
+# Team shooting
+
+
+
+```{r}
+jleague_2020_shooting_df <- readr::read_csv("https://raw.githubusercontent.com/Ryo-N7/soccer_ggplots/master/data/J-League_2020_review/jleague_2020_shooting_df.csv")
+```
+
+
+## plot
+
+```{r}
+shotsF_avg <- unique(jleague_2020_shooting_df$sh_avg)
+  
+shotsA_avg <- unique(jleague_2020_shooting_df$sh_against_avg)
+
+bad_box <- data.frame(
+  xmin = -Inf, xmax = shotsF_avg, 
+  ymin = -Inf, ymax = shotsA_avg)
+
+chance_creation_box <- data.frame(
+  xmin = -Inf, xmax = shotsF_avg, 
+  ymin = shotsA_avg, ymax = Inf)
+
+midfield_progress_box <- data.frame(
+  xmin = shotsF_avg, xmax = Inf, 
+  ymin = -Inf, ymax = shotsA_avg)
+
+dual_box <- data.frame(
+  xmin = shotsF_avg, xmax = Inf, 
+  ymin = shotsA_avg, ymax = Inf)
+```
+
+
+```{r fig.height=20, fig.width=24}
+jleague_2020_shooting_plot <- jleague_2020_shooting_df %>% 
+  ggplot(aes(x = `Sh/90`, y = `Sh/90_against`)) + 
+  ## area fills
+  geom_rect(data = chance_creation_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "red", alpha = 0.1) +
+  geom_rect(data = bad_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "yellow", alpha = 0.1) +
+  geom_rect(data = midfield_progress_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "green", alpha = 0.2) +
+  geom_rect(data = dual_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "yellow", alpha = 0.1) +
+  geom_point(size = 10) +
+  geom_text_repel(data = jleague_2020_shooting_df %>% filter(!Squad %in% c("Kashima Antlers", "Kawasaki Frontale")),
+                  aes(label = Squad),
+                  size = 12, nudge_y = 0.25, force = 4,
+                  min.segment.length = 0, segment.size = 1.25, fontface = "bold",
+                  segment.color = "#000000", seed = 8, box.padding = unit(10, "mm"),
+                  family = "Roboto Condensed") +
+  geom_text_repel(data = jleague_2020_shooting_df %>% filter(Squad == "Kashima Antlers"),
+                  aes(label = Squad),
+                  size = 12, nudge_x = 0.25, force = 4,
+                  min.segment.length = 0, segment.size = 1.25, color = "darkred", fontface = "bold",
+                  segment.color = "#000000", seed = 8, box.padding = unit(10, "mm"),
+                  family = "Roboto Condensed") +
+  geom_text_repel(data = jleague_2020_shooting_df %>% filter(Squad == "Kawasaki Frontale"),
+                  aes(label = Squad),
+                  size = 12, nudge_y = 0.25, force = 4,
+                  min.segment.length = 0, segment.size = 1.25, color = "#1EB8FF", fontface = "bold",
+                  segment.color = "#000000", seed = 8, box.padding = unit(10, "mm"),
+                  family = "Roboto Condensed") +
+  ## median reference lines
+  geom_hline(yintercept = shotsA_avg, color = "grey20", alpha = 0.7, size = 1.25) +
+  geom_vline(xintercept = shotsF_avg, color = "grey20", alpha = 0.7, size = 1.25) +
+  ## area labels
+  annotate(
+    "text", family = "Roboto Condensed", fontface = "bold",
+    x = 8, y = 17, 
+    hjust = 0, color = "red", size = 12,
+    label = "Quiet Attack | Busy Defense") +
+  annotate(
+    "text", family = "Roboto Condensed", fontface = "bold",
+    x = 8, y = 9, 
+    hjust = 0, color = "#7f7f00", size = 12,
+    label = "Quiet Attack | Quiet Defense") +
+  annotate( # #7f7f00  #228B22 #CCCC00
+    "text", family = "Roboto Condensed", fontface = "bold",
+    x = 17, y = 17, 
+    hjust = 0, color = "#7f7f00", size = 12,
+    label = "Busy Attack | Busy Defense") +
+  annotate(
+    "text", family = "Roboto Condensed", fontface = "bold",
+    x = 17, y = 9, 
+    hjust = 0, color = "#228B22", size = 12,
+    label = "Busy Attack | Quiet Defense") +
+  ## League averages
+  annotate(
+    "text", family = "Roboto Condensed", fontface = "bold",
+    x = 13.5, y = 16.5, 
+    hjust = 0, color = "grey20", size = 12,
+    label = glue("Average: {shotsF_avg} Shots Taken")) +
+  annotate(
+    "text", family = "Roboto Condensed", fontface = "bold",
+    x = 17, y = 13.15, 
+    hjust = 0, color = "grey20", size = 12,
+    label = glue("Average: {shotsA_avg} Shots Conceded")) +
+  scale_x_continuous(limit = c(8, 20),
+                     labels = seq(8, 20, 2), 
+                     breaks = seq(8, 20, 2)) +
+  scale_y_reverse(limit = c(17, 9),
+                  labels = seq(9, 17, 2), 
+                  breaks = seq(9, 17, 2)) +
+  labs(title = glue("
+                    <b style='color: #1EB8FF'>Kawasaki Frontale</b> & <b style='color: darkred'>Kashima Antlers</b> Doing Very Well at Both Ends of the Pitch"),
+       subtitle = "Shots Taken vs. Shots Conceded: J.League 2020",
+       x = "Shots per 90",
+       y = "Shots Against per 90",
+       caption = "Graphic: Ryo Nakagawara | Twitter: @R_by_Ryo | Source: FBref.com") + 
+  theme_minimal() +
+  theme(text = element_text(size = 30, family = "Roboto Slab"),
+        #plot.background = element_rect(fill = "grey"),
+        plot.title = element_markdown(size = 40),
+        plot.subtitle = element_text(size = 35),
+        plot.caption = element_text(size = 30),
+        axis.title = element_text(size = 35),
+        axis.text = element_text(size =30),
+        panel.grid.major = element_line(size = 2),
+        panel.grid.minor = element_line(size = 2))
+
+jleague_2020_shooting_plot
+```
+
+
+# Team xG
+
+
+```{r}
+xG_all_df <- readr::read_csv("https://raw.githubusercontent.com/Ryo-N7/soccer_ggplots/master/data/J-League_2020_review/team_xG_J-League-2020.csv")
+```
+
+
+## plot
+
+
+
+```{r}
+xGpg_avg <- unique(xG_all_df$xG_perGame_avg)
+  
+xGApg_avg <- unique(xG_all_df$xGA_perGame_avg)
+
+bad_box <- data.frame(
+  xmin = -Inf, xmax = xGpg_avg, 
+  ymin = -Inf, ymax = xGApg_avg)
+
+chance_creation_box <- data.frame(
+  xmin = xGpg_avg, xmax = Inf, 
+  ymin = -Inf, ymax = xGApg_avg)
+
+midfield_progress_box <- data.frame(
+  xmin = -Inf, xmax = xGpg_avg, 
+  ymin = xGApg_avg, ymax = Inf)
+
+dual_box <- data.frame(
+  xmin = xGpg_avg, xmax = Inf, 
+  ymin = xGApg_avg, ymax = Inf)
+```
+
+
+
+```{r fig.height=20, fig.width=24}
+xG_xGA_j_league_2020_plot <- ggplot(xG_all_df,
+       aes(x = xG_perGame, y = xGA_perGame)) +
+  ## area fills
+  geom_rect(data = chance_creation_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "green", alpha = 0.1) +
+  geom_rect(data = bad_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "yellow", alpha = 0.1) +
+  geom_rect(data = midfield_progress_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "red", alpha = 0.2) +
+  geom_rect(data = dual_box,
+            aes(x = NULL, y = NULL,
+                xmin = xmin, xmax = xmax,
+                ymin = ymin, ymax = ymax),
+            fill = "yellow", alpha = 0.1) +
+  geom_hline(aes(yintercept = xGA_perGame_avg), color = "grey20", size = 2) + 
+  geom_vline(aes(xintercept = xG_perGame_avg), color = "grey20", size = 2) + 
+  geom_point(size = 10) +
+  geom_text_repel(aes(label = team_name),
+                  size = 12, nudge_y = 0.025, force = 4,
+                  min.segment.length = 0, segment.size = 1.25, fontface = "bold",
+                  segment.color = "#000000", seed = 8, box.padding = unit(10, "mm"),
+                  family = "Roboto Condensed") +
+  #geom_image(aes(image = img), size = 0.055) +
+  ## area labels
+  annotate(
+    "text", family = "Roboto Condensed", fontface = "bold",
+    y = 2, x = 0.83, 
+    hjust = 0, color = "red", size = 12,
+    label = "Bad Attack | Bad Defense") +
+  annotate(
+    "text", family = "Roboto Condensed", fontface = "bold",
+    y = 2, x = 2, 
+    hjust = 0, color = "#7f7f00", size = 12,
+    label = "Good Attack | Bad Defense") +
+  annotate( # #7f7f00  #228B22 #CCCC00
+    "text", family = "Roboto Condensed", fontface = "bold",
+    y = 0.75, x = 0.83, 
+    hjust = 0, color = "#7f7f00", size = 12,
+    label = "Bad Attack | Good Defense") +
+  annotate(
+    "text", family = "Roboto Condensed", fontface = "bold",
+    y = 0.75, x = 2, 
+    hjust = 0, color = "#228B22", size = 12,
+    label = "Good Attack | Good Defense") +
+    ## League averages
+  annotate(
+    "text", family = "Roboto Condensed", fontface = "bold",
+    y = 0.85, x = 1.4, 
+    hjust = 0, color = "grey20", size = 12,
+    label = glue("Average: {round(xGpg_avg, 2)} xG per Game")) +
+  annotate(
+    "text", family = "Roboto Condensed", fontface = "bold",
+    y = 1.45, x = 2.2, 
+    hjust = 0, color = "grey20", size = 12,
+    label = glue("Average: {round(xGApg_avg, 2)} xGA per Game")) +
+  ## scales
+  scale_x_continuous(limit = c(0.8, 2.6),
+                     labels = seq(0.5, 2.6, 0.5),
+                     breaks = seq(0.5, 2.6, 0.5)) +
+  scale_y_reverse(limit = c(2, 0.75),
+                  labels = seq(0, 2, 0.5),
+                  breaks = seq(0, 2, 0.5)) +
+  labs(
+    title = "Quality of Shots Taken (xG) vs. Quality of Shots Conceded (xGA)",
+    subtitle = "J.League 2020",
+    x = "xG per Game",
+    y = "xGA per Game",
+    caption = "Graphic: Ryo Nakagawara | Twitter: @R_by_Ryo | Source: Football-Lab.jp"
+  ) +
+  theme_minimal() +
+  theme(text = element_text(size = 30, family = "Roboto Slab"),
+        plot.title = element_markdown(size = 45),
+        plot.subtitle = element_text(size = 35),
+        plot.caption = element_text(size = 30),
+        axis.title = element_text(size = 35),
+        axis.text = element_text(size =30),
+        panel.grid.major = element_line(size = 2),
+        panel.grid.minor = element_line(size = 2))
+
+xG_xGA_j_league_2020_plot
+```
+
+
+## individual xG
+
+```{r}
+xGLeaders_df <- readr::read_csv("https://raw.githubusercontent.com/Ryo-N7/soccer_ggplots/master/data/J-League_2020_review/jleague_2020_individual_xG.csv")
+```
+
+
+
+```{r fig.height=20, fig.width=24}
+xGleaders_plot <- xGLeaders_df %>% 
+  ggplot(aes(x = npxG, y = npGoals)) + 
+    imap(seq(0.5, 1.5, by = 0.25), function(slope, i) {
+
+    # Calculate the position of the labels, such that
+    # they run along the top horizontally, beyond a
+    # maximum y value
+    max_x <- 32
+    max_y <- 32
+    label_x <- ifelse(slope*max_x <= max_y, max_x, (max_y / slope))
+    label_y <- slope*label_x
+
+    # Only show the full label for the first annotation
+    label <- str_glue("{slope * 100}% of xG")
+    if (i == 5) {
+      label <- str_glue("Scored {slope * 100}% of xG")
+    }
+
+    # Return the layers
+    list(
+      geom_segment(x = 0, y = 0, 
+                   xend = max_x * 2, yend = slope* max_x * 2, 
+                   linetype = "dashed", colour = "#e60000", size = 2),
+      annotate(geom = "label", x = label_x, label_y,
+               label = label, hjust = 1, size = 12, 
+               fill = "#F0F0F0", colour = "#800000", 
+               label.size = 0, 
+               family = "Roboto Slab", fontface = "bold")
+    )
+  }) +
+  geom_point(size = 8) + 
+  geom_text_repel(#data = filter(xGLeaders_df, 
+                                #npxG >= 10, npGoals >= 10),
+                  aes(label = player_name_EN),
+                  min.segment.length = 0, 
+                  size = 12, 
+                  force = 15, force_pull = 0.1,
+                  family = "Roboto Slab", fontface = "bold",
+                  color = "#000000",
+                  segment.size = 2,
+                  #point.padding = unit(30, "lines"), 
+                  #label.padding = 0.5,
+                  box.padding = 0.9
+                  ) +
+  coord_cartesian(xlim = c(0, 32), ylim = c(0, 32)) +
+  scale_x_continuous() +
+  scale_y_continuous() +
+  labs(title = "Elite finishers of the J.League",
+       subtitle = "Top 20 xG leaders in the 2020 season",
+       caption = "Graphic: Ryo Nakagawara | Twitter: @R_by_Ryo | Source: Football-Lab.jp",
+       x = "Non-Penalty xG",
+       y = "Non-Penalty Goals") +
+  theme_minimal() + 
+  theme(plot.title = element_text(size = 55),
+        plot.subtitle = element_text(size = 40),
+        plot.caption = element_text(size = 30),
+        text = element_text(size = 40, family = "Roboto Slab"),
+        plot.background = element_rect(fill = "#F0F0F0"),
+        panel.grid = element_line(color = "black"))
+
+xGleaders_plot
+```
+
+
+
+
