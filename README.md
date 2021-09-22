@@ -2,6 +2,8 @@
 
 [Ryo Nakagawara | Twitter: `@R_by_Ryo`](https://twitter.com/R_by_Ryo) [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/O4O342A2A)
+
 ### NEW: J.League 2020 Season Review with R (Jan. 14, 2021)
 
 * [J.League 2020 Season Review with R](https://ryo-n7.github.io/2021-01-14-jleague-2020-season-review-with-r/)
