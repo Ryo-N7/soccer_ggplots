@@ -1,0 +1,328 @@
+---
+title: "Solution to the 'preserving the sum after rounding' problem in a soccer waffle viz!"
+always_allow_html: yes
+output: 
+  md_document:
+    variant: markdown_github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+I recently came across a cool waffle viz for the top 20 shot-creating action players in the big 5 European soccer leagues done by [Harsh Krishna](https://twitter.com/placehoIder2004) on Twitter, see [original Tweet here](https://twitter.com/placehoIder2004/status/1480136784021393409). He also posted the code [in this Github gist](https://github.com/harshkrishna17/R-Code/blob/main/Waffle.R) with a call for help in solving an issue he was having with the preserving the sum of a group of metrics after rounding the individual metrics to integers. __Below is the code he posted in full.__ The problem in particular is after the second `for` loop where he rounds the metrics, he finds that the sum of the metrics don't add up to 100(%). His way of resolving this was choosing the `Sh_SCA` variable and trying to manipulate the values in that metric until the total summed back up to 100.
+
+```{r eval=FALSE}
+# Harsh Krishna `@placeholder2004`
+# https://github.com/harshkrishna17/R-Code/blob/main/Waffle.R
+# Libraries
+
+library(tidyverse)
+library(worldfootballR)
+library(ggtext)
+library(extrafont)
+library(waffle)
+library(MetBrewer)
+
+# Scraping
+
+data <- fb_big5_advanced_season_stats(season_end_year = 2022, stat_type = "gca", team_or_player = "player")
+
+# Data Wrangling 
+
+data1 <- data %>%
+  filter(Mins_Per_90 >= 9) %>%
+  select(Player, Mins_Per_90, SCA90_SCA, SCA_SCA, PassLive_SCA, PassDead_SCA, Drib_SCA, Sh_SCA, Fld_SCA, Def_SCA)
+
+data1 <- data1[order(as.numeric(data1$SCA90_SCA),decreasing = TRUE),]
+data1 <- data1[c(1:20),]
+
+df <- data1[order(as.numeric(data1$SCA90_SCA),decreasing = TRUE),]
+df <- df[c(1:20),]
+
+Player <- data1$Player
+Mins <- data1$Mins_Per_90
+data1 <- subset(data1, select = -c(Player, Mins_Per_90, SCA90_SCA))
+
+for(i in 1:ncol(data1)) {
+  data1[, i] <- data1[, i] / Mins
+}
+
+SCA <- data1$SCA_SCA 
+
+for(i in 1:ncol(data1)) {
+  data1[, i] <- round((data1[, i] / SCA) * 100, 0)
+}
+
+data1 <- data1 %>%
+  mutate(Total = PassLive_SCA + PassDead_SCA + Drib_SCA + Sh_SCA + Fld_SCA + Def_SCA)
+
+## run this ifelse statement as many times as necessary until the Total comes out to be a 100 for all rows.
+data1 <- data1 %>% mutate(Sh_SCA = ifelse(Total == 100, Sh_SCA,
+                                          ifelse(Total < 100, Sh_SCA + 1,
+                                                 ifelse(Total > 100, Sh_SCA - 1, NA)))) %>% 
+  mutate(Total = PassLive_SCA + PassDead_SCA + Drib_SCA + Sh_SCA + Fld_SCA + Def_SCA)
+
+data1$Player <- Player 
+
+data1 <- data1 %>%
+  pivot_longer(!Player, values_to = "SCAp90", names_to = "SCATypes") %>%
+  filter(!SCATypes == "SCA_SCA") %>%
+  filter(!SCATypes == "Total") %>%
+  count(Player, SCATypes, wt = SCAp90)
+
+data1$Player <- factor(data1$Player, levels = print(df$Player))
+
+# Custom theme function
+
+theme_athletic <- function() {
+  theme_minimal() +
+    theme(plot.background = element_rect(colour = "#151515", fill = "#151515"),
+          panel.background = element_rect(colour = "#151515", fill = "#151515")) +
+    theme(plot.title = element_text(colour = "white", size = 24, family = "Fried Chicken Bold", hjust = 0.5),
+          plot.subtitle = element_markdown(colour = "#525252", size = 18, hjust = 0.5),
+          plot.caption = element_text(colour = "white", size = 15, hjust = 1),
+          axis.title.x = element_text(colour = "white", face = "bold", size = 14),
+          axis.title.y = element_text(colour = "white", face = "bold", size = 14),
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank()) +
+    theme(panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.background = element_blank()) +
+    theme(legend.title = element_text(colour = "white"),
+          legend.text = element_text(colour = "white"))
+}
+
+# Plotting
+
+data1 %>%
+  ggplot(aes(fill = SCATypes, values = n)) +
+  geom_waffle(nrows = 10, size = 1.5, colour = "#151515", flip = TRUE) +
+  scale_fill_manual(values = met.brewer(name = "Gauguin", n = 6, type = "discrete")) +
+  facet_wrap(~Player) +
+  labs(title = "Big 5 Leagues Shot-Creating Actions Share [2021/22]",
+       subtitle = "Top 20 Players with the most SCA per 90 so far",
+       caption = "Minimum 9 90's Played\nData from FBref\nCreated by @placeholder2004") +
+  theme_athletic() +
+  theme(aspect.ratio = 1,
+        strip.background = element_blank(),
+        strip.text = element_text(colour = "white", size = 14),
+        legend.position = "bottom",
+        legend.text = element_text(size = 14))
+
+# Save
+
+setwd("C:/Users/harsh_1mwi2o4/Downloads")
+ggsave("wafflebig5.png", width = 3100, height = 3500, units = "px")
+```
+
+This is a problem I've faced in the past and I'm sure many others have too, whether in the context of soccer analysis or otherwise. So I decided to tackle this problem as a fun coding challenge using the __tidyverse__!
+
+Let's get started!
+
+# Packages 
+
+I prefer typing out the specific tidyverse packages rather than loading everything in at once.
+
+```{r message=FALSE}
+library(dplyr)
+library(tidyr)
+library(worldfootballR)
+library(ggtext)
+library(extrafont)
+library(waffle)
+library(MetBrewer)
+```
+
+# Scrape data
+
+Get data from FBref/StatsBomb with the {worldfootballR} package.
+
+```{r eval=FALSE}
+# Scraping
+data_raw <- fb_big5_advanced_season_stats(season_end_year = 2022, stat_type = "gca", team_or_player = "player")
+```
+
+```{r echo=FALSE}
+# saveRDS(data_raw, file = here::here("data/sca_big5_demo.RDS"))
+# write.csv(data_raw, file = here::here("data/sca_big5_demo.csv"))
+data_raw <- read.csv(file = "https://raw.githubusercontent.com/Ryo-N7/soccer_ggplots/master/data/sca_big5_demo.csv")
+```
+
+```{r}
+glimpse(data_raw)
+```
+
+Instead of ordering and subsetting with base functions in the original, I used `arrange()` and `slice()` to grab the top 20 players by SCA per 90.
+
+```{r}
+# Data Wrangling 
+df1 <- data_raw %>%
+  filter(Mins_Per_90 >= 9) %>%
+  ## use contains() so I don't have to type out every `SCA` variable out
+  select(Player, Mins_Per_90, contains("SCA")) %>% 
+  ## arrange by SCA per 90 (descending) then take top 20 rows
+  arrange(desc(SCA90_SCA)) %>%
+  slice(1:20)
+
+glimpse(df1)
+```
+
+Instead of using a `for` loop to perform the calculations on each column, I used `mutate()` and then `across()` to specify the columns I wanted to run the same operation on, dividing the metrics by the number of minutes that each player played. Also since we are using `mutate()` we don't need to pull out the `Mins` variable anymore as we can just refer to that specific column in the data.frame.
+
+```{r}
+df2 <- df1 %>% 
+  ## use across() to specify which vars to perform operations on
+  ## ex. all cols EXCEPT `Player`, `Mins_Per_90`, and `SCA90_SCA`
+  mutate(across(-c(Player, Mins_Per_90, SCA90_SCA), ~ . / Mins_Per_90)) 
+
+glimpse(df2)
+```
+
+Again, here instead of using a `for` loop I used the same `mutate() + across()` trick again to divide the values by each of the total SCA types and then multiply that by 100.
+
+What you get now is that all the per 90 stats are in terms of percentages of the total SCA. 
+
+```{r}
+df3 <- df2 %>% 
+  ## use across() to specify which vars to perform operations on
+  ## ex. all cols EXCEPT `Player`, `Mins_Per_90`, and `SCA90_SCA`
+  mutate(across(-c(Player, Mins_Per_90, SCA90_SCA), ~ (. / SCA_SCA) * 100 )) %>% 
+  mutate(Total = PassLive_SCA + PassDead_SCA + Drib_SCA + Sh_SCA + Fld_SCA + Def_SCA) %>% 
+  select(Player, Mins_Per_90, Total, contains("SCA"))
+
+glimpse(df3)
+```
+
+Then I check using `Total` column if the numbers sum to 100. They do, so we know that these per 90 numbers are good and everything adds up to 100% properly.
+
+For the purpose of making a waffle chart, we have to turn all of these values into integers. However, the problem with this is that due to rounding the individual values, the sum doesn't equal 100 after the calculation! Some sums might equal to 99 or 98, some to 100, and some to 101!
+
+# Preserve sum after rounding function
+
+I looked around and tried out a **lot** of different things, not just different functions but also ways to re-shape the data so that the algorithm would work correctly. The first function I tried was the `largeRem()` function [here](https://github.com/basilesimon/largeRem/) but this only worked for when the sums would add up to -1 (99) or +1 (101) from 100. So I then started manually adding more branches to the if-else statements but since I knew there had to be something better out there I moved on. Eventually I found the function below, hoisted from the [{JLutils}](https://github.com/larmarange/JLutils/blob/master/R/round_preserve_sum.R) package that has a pretty good implementation of the **largest remainder** algorithm:
+
+```{r}
+round_preserve_sum <- function(x, digits = 0) {
+  up <- 10^digits
+  x <- x * up
+  y <- floor(x)
+  indices <- tail(order(x - y), round(sum(x)) - sum(y))
+  y[indices] <- y[indices] + 1
+  y / up
+}
+```
+
+I honestly wanted to show how to do **row-wise** operations using the tidyverse in this section because I got tired of having to pivot back and forth and back and forth. See [here](https://dplyr.tidyverse.org/articles/rowwise.html) for how row-wise operations work in the tidyverse. However, the custom function I used to preserve the sum wasn't created to support the tidyverse's row-wise method, so I ended up having to transpose the data and un-transpose it with the pivot functions anyway. At the end, we can check our work by creating a `Total` variable again to see that everything sums up to 100 even after rounding all the metrics into integers!
+
+```{r}
+df4 <- df3 %>% 
+  select(-Mins_Per_90, -SCA90_SCA, -SCA_SCA, -Total) %>% 
+  ## transpose
+  pivot_longer(cols = -Player) %>% 
+  pivot_wider(names_from = Player, values_from = value) %>% 
+  ## run function over player column
+  mutate(across(-name, ~ round_preserve_sum(.))) %>% 
+  ## transpose back to original shape
+  pivot_longer(names_to = "Player", values_to = "thing", cols = -name) %>% 
+  pivot_wider(names_from = name, values_from = thing) %>% 
+  mutate(Total = PassLive_SCA + PassDead_SCA + Drib_SCA + Sh_SCA + Fld_SCA + Def_SCA)
+
+glimpse(df4)
+```
+
+<img src="../assets/2022-01-14-preserve-sum-rounding-soccer-viz_files/rex_experience_outranks_everything.gif" style="display: block; margin: auto;" align ="middle" width = "600" />
+
+Now all that's left is to pivot the data based on the different Shot-Creating Action types so that the data is re-shaped into the format needed for the waffle plot. I also cleaned up the SCA types so that it reads nicer on the final plot using the `case_when()` function, which is like a Super Saiyan version of if-else statements. 
+
+```{r}
+df5 <- df4 %>%
+  ## we don't need the `Total` column anymore...
+  select(-Total) %>% 
+  ## Pivot so that we get the all the SCA types collapsed into a single column
+  pivot_longer(!Player, values_to = "SCAp90", names_to = "SCATypes") %>%
+  mutate(SCATypes = case_when(
+    SCATypes == "Def_SCA" ~ "Defensive Action SCA",
+    SCATypes == "Drib_SCA" ~ "Dribble SCA",
+    SCATypes == "Fld_SCA" ~ "Fouled SCA",
+    SCATypes == "PassDead_SCA" ~ "Dead-ball Pass SCA",
+    SCATypes == "PassLive_SCA" ~ "Pass SCA",
+    SCATypes == "Sh_SCA" ~ "Shot SCA",
+    TRUE ~ SCATypes
+  )) %>% 
+  count(Player, SCATypes, wt = SCAp90)
+
+glimpse(df5)
+```
+
+# 'The Athletic' Theme
+
+I do feel that the subtitle should pop out a bit more, but I want to preserve the original as much as possible so I won't change anything here...!
+
+```{r}
+theme_athletic <- function() {
+  theme_minimal() +
+    theme(plot.background = element_rect(colour = "#151515", fill = "#151515"),
+          panel.background = element_rect(colour = "#151515", fill = "#151515")) +
+    theme(plot.title = element_text(colour = "white", size = 24, family = "Fried Chicken Bold", hjust = 0.5),
+          plot.subtitle = element_markdown(colour = "#525252", size = 18, hjust = 0.5),
+          plot.caption = element_text(colour = "white", size = 15, hjust = 1),
+          axis.title.x = element_text(colour = "white", face = "bold", size = 14),
+          axis.title.y = element_text(colour = "white", face = "bold", size = 14),
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank()) +
+    theme(panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.background = element_blank()) +
+    theme(legend.title = element_text(colour = "white"),
+          legend.text = element_text(colour = "white"))
+}
+```
+
+# Plot
+
+Not much needs to be changed here again, I just cleaned the legend title a bit.
+
+**NOTE**: The players in the plot changed because, well, there's been plenty of football since the [original viz was posted](https://twitter.com/placehoIder2004/status/1480136784021393409)!
+
+```{r fig.width=31, fig.height=35}
+wafplot <- df5 %>%
+  ggplot(aes(fill = SCATypes, values = n)) +
+  geom_waffle(nrows = 10, size = 1.5, colour = "#151515", flip = TRUE) +
+  scale_fill_manual(values = met.brewer(name = "Gauguin", n = 6, type = "discrete"),
+                    name = "Shot-Creating Action Type") +
+  facet_wrap(~Player) +
+  labs(title = "Big 5 Leagues Shot-Creating Actions Share [2021/22]",
+       subtitle = "Top 20 Players with the most SCA per 90 so far",
+       caption = "Minimum 9 90's Played\nData from FBref\nCreated by @placeholder2004") +
+  theme_athletic() +
+  theme(aspect.ratio = 1,
+        strip.background = element_blank(),
+        strip.text = element_text(colour = "white", size = 14),
+        legend.position = "bottom",
+        legend.text = element_text(size = 14))
+wafplot
+```
+
+I've just added the call to `here::here()`, a force of habit to keep file paths relative to the project root directory. Typing out the entire path is an annoyance so you can just do this to avoid it. Also helps when you move projects to a different computer or you're collaborating using somebody else's code, you don't have to re-type `C:/Users/blahblah/blahblah/...` all the time.
+
+```{r eval=FALSE}
+ggsave(plot = wafplot, filename = here::here("Europe 2021-2022/output/big5_SCA_waffle_plot.png"), 
+       width = 3100, height = 3500, units = "px")
+```
+
+...and done! 
+
+So this was a very short blog post on finding a solution to the "preserve sum after rounding" problem as well as re-writing some of the code to fit my coding style using the tidyverse. Just to be clear, aside from the main problem, none of the code in the original script was wrong! At the end of the day, it worked and a great viz was created, so there obviously was no problem at all. I hope the way I did it shows people there are different ways to approach a problem and that you learned about a couple of new functions and tricks along the way!
+
+I spent about 1~2 hours on this and most of it was googling for different solutions and finding documentation which goes to show how important being able to search for the right things on the internet is for programming in general. You're never going to be able to memorize everything you've ever done, so being good at googling is paramount. Being able to look up stuff efficiently is a skill that needs to be mastered, so things like taking on coding challenges I see in the wild (like the problem presented in this blog post) or taking part in community challenges like #TidyTuesday can help you gain valuable experience. 
+
+<img src="../assets/2022-01-14-preserve-sum-rounding-soccer-viz_files/rex_experience_outranks_everything.gif" style="display: block; margin: auto;" align ="middle" width = "600" />
+
+Of course, there are also other ways to crystallize knowledge such as ... writing a blog post about an interesting problem!
+
+Special thanks to Harsh Krishna for sharing the code to his beautiful data viz. Hope this blog post was useful to everyone!
+
+<center>
+<script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script><script type='text/javascript'>kofiwidget2.init('Buy Me A Coffee!', '#29abe0', 'O4O342A2A');kofiwidget2.draw();</script> 
+<center/>
