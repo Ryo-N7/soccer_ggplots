@@ -1,0 +1,403 @@
+---
+title: "Untitled"
+author: "RN7"
+date: "1/13/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Packages 
+
+```{r message=FALSE}
+pacman::p_load(
+  japansoccer, japansoccerviz,
+  dplyr, tidyr, purrr,
+  stringr, tibble,
+  glue, extrafont,
+  ggplot2, magick,
+  cowplot, patchwork,
+  rvest, polite
+)
+
+# extrafont::loadfonts()
+
+#source(here::here("scripts/scrape_football_lab.R"))
+```
+
+```{r}
+# Libraries
+
+# library(tidyverse)
+library(worldfootballR)
+library(ggtext)
+library(extrafont)
+library(waffle)
+# library(MetBrewer)
+
+# Scraping
+
+data <- fb_big5_advanced_season_stats(season_end_year = 2022, stat_type = "gca", team_or_player = "player")
+
+# Data Wrangling 
+
+data1 <- data %>%
+  filter(Mins_Per_90 >= 9) %>%
+  select(Player, Mins_Per_90, contains("SCA")) %>% 
+  arrange(desc(SCA90_SCA)) %>% 
+  slice(1:20)
+
+
+Player <- data1$Player
+Mins <- data1$Mins_Per_90
+df1111 <- subset(data1, select = -c(Player, Mins_Per_90, SCA90_SCA))
+
+for(i in 1:ncol(df1111)) {
+  df1111[, i] <- df1111[, i] / Mins
+}
+
+SCA <- df1111$SCA_SCA 
+
+for(i in 1:ncol(df1111)) {
+  df1111[, i] <- round((df1111[, i] / SCA) * 100, 0)
+}
+
+df1111 <- df1111 %>%
+  mutate(Total = PassLive_SCA + PassDead_SCA + Drib_SCA + Sh_SCA + Fld_SCA + Def_SCA)
+
+df1111
+```
+
+
+
+```{r}
+largeRem <- function(pcVec) {
+
+  # if(sum(pcVec) != 100) stop("The sum of the items in your column isn't equal to 100")
+
+  # If the sum of our rounds() is 99, we need to add one;
+  # if greater than 100, we need to substract one
+  # In case of equality (eg c(33.33, 33.33, 33.33)) we pick one at random with sample()
+  diffTo100 <- 100 - sum(as.integer(pcVec))
+  if (diffTo100 == 1) {
+    index <- which.max(pcVec %% 1)
+  } else if (diffTo100 == -1)  {
+    index <- which.min(pcVec %% 1)
+  }
+
+  if(length(unique(pcVec %% 1)) == 1) {
+    index <- sample(1:length(pcVec), 1)
+  }
+
+  pcVec[index] <- pcVec[index] + diffTo100
+  return(as.integer(pcVec))
+}
+```
+
+```{r}
+df4 <- data1 %>% 
+  # select(-Player, - Mins_Per_90, -SCA90_SCA) %>% 
+  mutate(across(-c(Player, Mins_Per_90, SCA90_SCA), ~ . / Mins)) %>% 
+  mutate(across(-c(Player, Mins_Per_90, SCA90_SCA), ~ . / SCA))
+
+df4
+```
+
+```{r}
+## DONE!
+df4 %>% 
+  rowwise() %>% 
+  mutate(across(-c(Player, Mins_Per_90, SCA90_SCA), ~ round_preserve_sum(. * 100))) %>% 
+  ungroup() %>% 
+  mutate(Total = PassLive_SCA + PassDead_SCA + Drib_SCA + Sh_SCA + Fld_SCA + Def_SCA) %>% 
+  select(Player, Total, contains("SCA"))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+df2 %>% 
+  pivot_longer(-c(Player, Mins_Per_90, SCA_SCA, SCA90_SCA), values_to = "vals") %>% 
+  group_by(Player) %>% 
+  summarize(vals = list(vals)) %>% 
+  ungroup() %>% 
+  mutate(vals = c(vals)) %>% 
+  slice(1) %>% 
+  select(vals) %>% pull() %>% .[[1]] -> vec_one
+```
+
+
+```{r}
+pcVec <- vec_one * 100
+
+diffTo100 <- 100 - sum(as.integer(pcVec))
+
+if (diffTo100 == 1) {
+  index <- which.max(pcVec %% 1)
+} else if (diffTo100 == -1)  {
+  index <- which.min(pcVec %% 1)
+}
+
+if(length(unique(pcVec %% 1)) == 1) {
+  index <- sample(1:length(pcVec), 1)
+}
+
+pcVec[index] <- pcVec[index] + diffTo100
+
+pcVec
+```
+
+
+
+
+```{r}
+df2 %>% 
+  pivot_longer(-c(Player, Mins_Per_90, SCA_SCA, SCA90_SCA), values_to = "vals") %>% 
+  group_by(Player) %>% 
+  summarize(vals = list(vals)) %>% 
+  slice(1) %>% 
+  mutate(vals = largeRem(vals))
+```
+
+
+```{r}
+round_preserve_sum <- function(x, digits = 0) {
+  up <- 10^digits
+  x <- x * up
+  y <- floor(x)
+  indices <- tail(order(x - y), round(sum(x)) - sum(y))
+  y[indices] <- y[indices] + 1
+  y / up
+}
+```
+
+```{r}
+round_preserve_sum(pcVec)
+```
+
+
+
+```{r}
+df2 %>% 
+  pivot_longer(-c(Player, Mins_Per_90, SCA_SCA, SCA90_SCA), values_to = "vals") %>% 
+  group_by(Player) %>% 
+  summarize(vals = list(vals)) %>% 
+  mutate(vals = map(vals, ~ largeRem(.)))
+```
+
+
+
+```{r}
+df2 %>% 
+  group_by(SCA_SCA) %>% 
+  summarize()
+```
+
+
+
+```{r}
+SCA2 <- df2$SCA_SCA
+
+for (i in 1:ncol(df2)) {
+  df2[, i] <- largeRem(df2[, i] / SCA)
+}
+
+
+```
+
+
+```{r}
+## run this ifelse satatement as many times as necessarry until the Total comes out to be a 100 for all rows.
+
+data1 <- data1 %>% mutate(Sh_SCA = ifelse(Total == 100, Sh_SCA,
+                                          ifelse(Total < 100, Sh_SCA + 1,
+                                                 ifelse(Total > 100, Sh_SCA - 1, NA)))) %>% 
+  mutate(Total = PassLive_SCA + PassDead_SCA + Drib_SCA + Sh_SCA + Fld_SCA + Def_SCA)
+
+data1$Player <- Player 
+
+data1 <- data1 %>%
+  pivot_longer(!Player, values_to = "SCAp90", names_to = "SCATypes") %>%
+  filter(!SCATypes == "SCA_SCA") %>%
+  filter(!SCATypes == "Total") %>%
+  count(Player, SCATypes, wt = SCAp90)
+
+data1$Player <- factor(data1$Player, levels = print(df$Player))
+```
+
+
+## Plot ----
+
+```{r}
+# Custom theme function
+
+theme_athletic <- function() {
+  theme_minimal() +
+    theme(plot.background = element_rect(colour = "#151515", fill = "#151515"),
+          panel.background = element_rect(colour = "#151515", fill = "#151515")) +
+    theme(plot.title = element_text(colour = "white", size = 24, family = "Fried Chicken Bold", hjust = 0.5),
+          plot.subtitle = element_markdown(colour = "#525252", size = 18, hjust = 0.5),
+          plot.caption = element_text(colour = "white", size = 15, hjust = 1),
+          axis.title.x = element_text(colour = "white", face = "bold", size = 14),
+          axis.title.y = element_text(colour = "white", face = "bold", size = 14),
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank()) +
+    theme(panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.background = element_blank()) +
+    theme(legend.title = element_text(colour = "white"),
+          legend.text = element_text(colour = "white"))
+}
+
+# Plotting
+
+data1 %>%
+  ggplot(aes(fill = SCATypes, values = n)) +
+  geom_waffle(nrows = 10, size = 1.5, colour = "#151515", flip = TRUE) +
+  # scale_fill_manual(values = met.brewer(name = "Gauguin", n = 6, type = "discrete")) +
+  facet_wrap(~Player) +
+  labs(title = "Big 5 Leagues Shot-Creating Actions Share [2021/22]",
+       subtitle = "Top 20 Players with the most SCA per 90 so far",
+       caption = "Minimum 9 90's Played\nData from FBref\nCreated by @placeholder2004") +
+  theme_athletic() +
+  theme(aspect.ratio = 1,
+        strip.background = element_blank(),
+        strip.text = element_text(colour = "white", size = 14),
+        legend.position = "bottom",
+        legend.text = element_text(size = 14))
+
+# Save
+
+setwd("C:/Users/harsh_1mwi2o4/Downloads")
+ggsave("wafflebig5.png", width = 3100, height = 3500, units = "px")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# 2nd try ----
+
+
+
+
+
+
+
+
+
+```{r}
+pcVec <- c(61.73913, 20, 6.086957, 2.608696, 9.565217, 0)
+digits <- 0
+x <- pcVec
+```
+
+
+
+
+
+
+```{r}
+largeRem <- function(pcVec) {
+
+  # if(sum(pcVec) != 100) stop("The sum of the items in your column isn't equal to 100")
+
+  # If the sum of our rounds() is 99, we need to add one;
+  # if greater than 100, we need to substract one
+  # In case of equality (eg c(33.33, 33.33, 33.33)) we pick one at random with sample()
+  diffTo100 <- 100 - sum(as.integer(pcVec))
+  if (diffTo100 == 1) {
+    index <- which.max(pcVec %% 1)
+  } else if (diffTo100 == -1)  {
+    index <- which.min(pcVec %% 1)
+  } else if (diffTo100 == 2) {
+    index <- which.max(pcVec %% 2)
+  }
+
+  if(length(unique(pcVec %% 1)) == 1) {
+    index <- sample(1:length(pcVec), 1)
+  }
+
+  pcVec[index] <- pcVec[index] + diffTo100
+  return(as.integer(pcVec))
+}
+```
+
+```{r}
+pcVec <- c(61.73913, 20, 6.086957, 2.608696, 9.565217, 0)
+
+sum(pcVec)
+```
+
+```{r}
+63 + 20 + 6 + 2 + 9
+```
+
+
+```{r}
+df3 %>% 
+  select(-Mins_Per_90, -SCA90_SCA, -SCA_SCA, -Total) %>% 
+  pivot_longer(cols = -Player) %>% 
+  pivot_wider(names_from = Player, values_from = value) %>% 
+  mutate(across(-name, ~ round_preserve_sum(.)))
+```
+
+
+
+
+```{r}
+df3 %>% 
+  select(-Mins_Per_90, -SCA90_SCA, -SCA_SCA, -Total) %>% 
+  t() %>% 
+  as_tibble(rownames = "vals") %>% 
+  janitor::row_to_names(row_number = 1) %>% 
+  mutate(across(-Player, ~ as.numeric(.))) %>% 
+  mutate(dpayet = largeRem(`Dimitri Payet`),
+         dpaytot = sum(dpayet)) %>% 
+  select(Player, `Dimitri Payet`, dpayet, dpaytot, everything())
+```
+
+
+
+```{r}
+df4 <- df3 %>% 
+  ## set calculations to perform by rows not cols
+  rowwise() %>% 
+  mutate(across(-c(Player, Mins_Per_90, SCA90_SCA, SCA_SCA), ~ round_preserve_sum(. ))) %>% 
+  ## turn rowwise off to resume to normal
+  ungroup() %>% 
+  mutate(Total = PassLive_SCA + PassDead_SCA + Drib_SCA + Sh_SCA + Fld_SCA + Def_SCA) %>% 
+  select(Player, Total, contains("SCA"))
+
+df4
+```
+
+
+
+
