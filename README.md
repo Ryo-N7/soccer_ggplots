@@ -4,11 +4,12 @@
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/O4O342A2A)
 
-### NEW: J.League 2021 Season Review(Dec. 20, 2021)
+### NEW: J.League 2022 Mid-Season Review (June 15, 2022)
 
 * [J.League 2020 Season Review with R](https://ryo-n7.github.io/2021-01-14-jleague-2020-season-review-with-r/)
-* [J.League 2021 Mid-season Review](https://ryo-n7.github.io/2021-07-26-jleague-2021-midseason-review/)
+* [J.League 2021 Mid-Season Review](https://ryo-n7.github.io/2021-07-26-jleague-2021-midseason-review/)
 * [J.League 2021 Season End Review](https://ryo-n7.github.io/2021-12-20-jleague-2021-endseason-review/)
+* [J.League 2022 Mid-Season Review](https://ryo-n7.github.io/2022-06-15-jleague-2022-midseason-review/)
 
 ### Web-scrape Soccer Data Tutorial
 
