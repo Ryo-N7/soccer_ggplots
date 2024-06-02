@@ -4,7 +4,15 @@
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/O4O342A2A)
 
-### NEW: J.League 2022 Mid-Season Review (June 15, 2022)
+## Shogun Soccer newsletter!
+
+I haven't updated this repository in a while... Nowadays you can find me on my Substack, [Shogun Soccer](https://www.shogunsoccer.com/): Analyzing the __J.League__ from a tactical, data, and fan perspective!
+
+__All the data viz are created with R!__
+
+### NEW: J.League 2023 Season Review (December 13, 2023)
+
+* [J.League 2023 Season Review](https://www.shogunsoccer.com/p/jleague-2023-season-review)
 
 * [J.League 2020 Season Review with R](https://ryo-n7.github.io/2021-01-14-jleague-2020-season-review-with-r/)
 * [J.League 2021 Mid-Season Review](https://ryo-n7.github.io/2021-07-26-jleague-2021-midseason-review/)
